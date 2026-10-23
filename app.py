@@ -11,30 +11,6 @@ app.config["SECRET_KEY"] = "susi-sa-mga-it"
 
 db.init_app(app)
 
-PREDEFINED_PRODUCTS = [
-    {
-        "name": "Broiler Starter Feed",
-        "category": "Poultry",
-        "unit_price": 1250,
-        "unit": "sack",
-        "low_stock_threshold": 5,
-    },
-    {
-        "name": "Broiler Finisher Feed",
-        "category": "Poultry",
-        "unit_price": 1200,
-        "unit": "sack",
-        "low_stock_threshold": 5,
-    },
-    {
-        "name": "Hog Grower Feed",
-        "category": "Swine",
-        "unit_price": 1100,
-        "unit": "sack",
-        "low_stock_threshold": 5,
-    },
-]
-
 @app.route("/")
 def index():
     products = db.session.execute(
@@ -84,17 +60,6 @@ def add_stock(product_id):
 
 with app.app_context():
     db.create_all()
-
-    if db.session.query(FeedProduct.id).first() is None:
-        for item in PREDEFINED_PRODUCTS:
-            db.session.add(
-                FeedProduct(
-                    **item,
-                    stock_quantity=0,
-                )
-            )
-
-        db.session.commit()
 
 if __name__ == "__main__":
     app.run(debug=True)

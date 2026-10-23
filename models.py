@@ -39,3 +39,41 @@ class InventoryLog(db.Model):
         default=lambda: datetime.now(timezone.utc)
     )
     remarks = db.Column(db.String(255))
+
+class Sale(db.Model):
+    __tablename__ = "sales"
+
+    id = db.Column(db.Integer, primary_key=True)
+    total_amount = db.Column(db.Numeric(12, 2), nullable=False)
+    timestamp = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    items = db.relationship(
+        "SaleItem",
+        backref="sale",
+        cascade="all, delete-orphan",
+        lazy=True,
+    )
+
+class SaleItem(db.Model):
+    __tablename__ = "sale_items"
+
+    id = db.Column(db.Integer, primary_key=True)
+    sale_id = db.Column(
+        db.Integer,
+        db.ForeignKey("sales.id"),
+        nullable=False,
+    )
+    product_id = db.Column(
+        db.Integer,
+        db.ForeignKey("feed_products.id"),
+        nullable=False,
+    )
+    quantity = db.Column(db.Float, nullable=False)
+    unit_price = db.Column(db.Numeric(10, 2), nullable=False)
+    subtotal = db.Column(db.Numeric(12, 2), nullable=False)
+
+    product = db.relationship("FeedProduct")

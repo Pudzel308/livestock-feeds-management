@@ -29,7 +29,6 @@ PRODUCTS = [
 ]
 
 with app.app_context():
-    # Remove only the temporary test product.
     sample_products = FeedProduct.query.filter(
         db.func.lower(FeedProduct.name) == "sample"
     ).all()
