@@ -10,6 +10,8 @@ from flask import (
 from sqlalchemy import select, func
 from sqlalchemy.exc import SQLAlchemyError
 
+import pandas as pd
+
 from models import db, FeedProduct, InventoryLog, Sale, SaleItem
 
 
@@ -262,5 +264,222 @@ with app.app_context():
     db.create_all()
 
 
+
+
+def _build_sales_trend(sales_frame, frequency, label_format):
+    """Return complete period buckets between the first and last sale."""
+    if sales_frame.empty:
+        return {"labels": [], "sales": [], "revenue": []}
+
+    periods = sales_frame["timestamp"].dt.to_period(frequency)
+    grouped = (
+        sales_frame.assign(period=periods)
+        .groupby("period")
+        .agg(sales=("id", "count"), revenue=("total_amount", "sum"))
+    )
+    all_periods = pd.period_range(
+        start=grouped.index.min(),
+        end=grouped.index.max(),
+        freq=frequency,
+    )
+    grouped = grouped.reindex(all_periods, fill_value=0)
+
+    return {
+        "labels": [period.start_time.strftime(label_format) for period in all_periods],
+        "sales": [int(value) for value in grouped["sales"].tolist()],
+        "revenue": [round(float(value), 2) for value in grouped["revenue"].tolist()],
+    }
+
+
+def _describe_values(label, values):
+    """Create JSON- and template-friendly descriptive statistics."""
+    series = pd.to_numeric(pd.Series(values), errors="coerce").dropna()
+    if series.empty:
+        return {
+            "label": label,
+            "count": 0,
+            "mean": None,
+            "median": None,
+            "std": None,
+            "min": None,
+            "max": None,
+        }
+
+    return {
+        "label": label,
+        "count": int(series.count()),
+        "mean": round(float(series.mean()), 2),
+        "median": round(float(series.median()), 2),
+        "std": round(float(series.std(ddof=1)), 2) if len(series) > 1 else None,
+        "min": round(float(series.min()), 2),
+        "max": round(float(series.max()), 2),
+    }
+
+
+@app.route("/analytics")
+def analytics():
+    sales_rows = db.session.execute(
+        select(Sale.id, Sale.timestamp, Sale.total_amount)
+        .order_by(Sale.timestamp, Sale.id)
+    ).all()
+    sales_frame = pd.DataFrame([dict(row._mapping) for row in sales_rows])
+
+    if not sales_frame.empty:
+        sales_frame["timestamp"] = (
+            pd.to_datetime(sales_frame["timestamp"], errors="coerce", utc=True)
+            .dt.tz_convert(None)
+        )
+        sales_frame["total_amount"] = pd.to_numeric(
+            sales_frame["total_amount"], errors="coerce"
+        ).fillna(0.0)
+        sales_frame = sales_frame.dropna(subset=["timestamp"])
+
+    item_rows = db.session.execute(
+        select(
+            SaleItem.quantity,
+            SaleItem.subtotal,
+            FeedProduct.name.label("product_name"),
+            FeedProduct.unit,
+        )
+        .join(Sale, SaleItem.sale_id == Sale.id)
+        .join(FeedProduct, SaleItem.product_id == FeedProduct.id)
+    ).all()
+    items_frame = pd.DataFrame([dict(row._mapping) for row in item_rows])
+
+    if not items_frame.empty:
+        items_frame["quantity"] = pd.to_numeric(
+            items_frame["quantity"], errors="coerce"
+        ).fillna(0.0)
+        items_frame["subtotal"] = pd.to_numeric(
+            items_frame["subtotal"], errors="coerce"
+        ).fillna(0.0)
+
+    top_sellers = []
+    if not items_frame.empty:
+        product_totals = (
+            items_frame.groupby(["product_name", "unit"], as_index=False)
+            .agg(units_sold=("quantity", "sum"), revenue=("subtotal", "sum"))
+            .sort_values(["units_sold", "revenue"], ascending=[False, False])
+            .head(5)
+        )
+        top_sellers = [
+            {
+                "name": str(row.product_name),
+                "unit": str(row.unit),
+                "units_sold": round(float(row.units_sold), 2),
+                "revenue": round(float(row.revenue), 2),
+            }
+            for row in product_totals.itertuples(index=False)
+        ]
+
+    sales_trends = {
+        "daily": _build_sales_trend(sales_frame, "D", "%Y-%m-%d"),
+        "weekly": _build_sales_trend(sales_frame, "W-SUN", "%Y-%m-%d"),
+        "monthly": _build_sales_trend(sales_frame, "M", "%b %Y"),
+    }
+
+    inventory_rows = db.session.execute(
+        select(
+            InventoryLog.timestamp,
+            InventoryLog.action_type,
+            InventoryLog.quantity,
+            InventoryLog.remarks,
+            FeedProduct.name.label("product_name"),
+            FeedProduct.unit,
+        )
+        .join(FeedProduct, InventoryLog.product_id == FeedProduct.id)
+    ).all()
+    inventory_frame = pd.DataFrame([dict(row._mapping) for row in inventory_rows])
+
+    inventory_movement = []
+    recent_inventory_logs = []
+    if not inventory_frame.empty:
+        inventory_frame["timestamp"] = (
+            pd.to_datetime(inventory_frame["timestamp"], errors="coerce", utc=True)
+            .dt.tz_convert(None)
+        )
+        inventory_frame["quantity"] = pd.to_numeric(
+            inventory_frame["quantity"], errors="coerce"
+        ).fillna(0.0)
+        tracked_actions = inventory_frame[
+            inventory_frame["action_type"].isin(["stock_added", "stock_sold"])
+        ]
+
+        if not tracked_actions.empty:
+            movement = (
+                tracked_actions.pivot_table(
+                    index=["product_name", "unit"],
+                    columns="action_type",
+                    values="quantity",
+                    aggfunc="sum",
+                    fill_value=0.0,
+                )
+                .reset_index()
+            )
+            for action in ("stock_added", "stock_sold"):
+                if action not in movement:
+                    movement[action] = 0.0
+            movement["total_movement"] = (
+                movement["stock_added"] + movement["stock_sold"]
+            )
+            movement = movement.sort_values("total_movement", ascending=False)
+            inventory_movement = [
+                {
+                    "name": str(row.product_name),
+                    "unit": str(row.unit),
+                    "stock_added": round(float(row.stock_added), 2),
+                    "stock_sold": round(float(row.stock_sold), 2),
+                    "net_change": round(
+                        float(row.stock_added - row.stock_sold), 2
+                    ),
+                }
+                for row in movement.itertuples(index=False)
+            ]
+
+        latest_logs = inventory_frame.dropna(subset=["timestamp"]).sort_values(
+            "timestamp", ascending=False
+        ).head(10)
+        action_labels = {
+            "stock_added": "Stock added",
+            "stock_sold": "Stock sold",
+        }
+        recent_inventory_logs = [
+            {
+                "timestamp": row.timestamp.strftime("%Y-%m-%d %H:%M UTC"),
+                "product_name": str(row.product_name),
+                "unit": str(row.unit),
+                "action": action_labels.get(
+                    str(row.action_type), str(row.action_type).replace("_", " ").title()
+                ),
+                "quantity": round(float(row.quantity), 2),
+                "remarks": row.remarks or "—",
+            }
+            for row in latest_logs.itertuples(index=False)
+        ]
+
+    daily_revenue = sales_trends["daily"]["revenue"]
+    descriptive_stats = []
+    if not sales_frame.empty:
+        descriptive_stats = [
+            _describe_values("Sale amount (₱)", sales_frame["total_amount"]),
+            _describe_values("Daily revenue (₱)", daily_revenue),
+        ]
+
+    total_revenue = float(sales_frame["total_amount"].sum()) if not sales_frame.empty else 0.0
+    total_sales = int(len(sales_frame))
+
+    return render_template(
+        "analytics.html",
+        total_sales=total_sales,
+        total_revenue=round(total_revenue, 2),
+        average_sale=round(total_revenue / total_sales, 2) if total_sales else 0.0,
+        products_moved=len(inventory_movement),
+        inventory_log_count=len(inventory_frame),
+        sales_trends=sales_trends,
+        top_sellers=top_sellers,
+        inventory_movement=inventory_movement,
+        recent_inventory_logs=recent_inventory_logs,
+        descriptive_stats=descriptive_stats,
+    )
 if __name__ == "__main__":
     app.run(debug=True)

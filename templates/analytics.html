@@ -1,0 +1,408 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics - Livestock Feeds Management{% endblock %}
+
+{% block head_extra %}
+    <style>
+        .analytics-intro {
+            margin: -8px 0 20px;
+            color: #555;
+        }
+
+        .analytics-controls,
+        .panel-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .analytics-controls label {
+            font-weight: bold;
+        }
+
+        .analytics-controls select {
+            margin-left: 8px;
+            padding: 8px 10px;
+            border: 1px solid #bbb;
+            border-radius: 4px;
+            background: #fff;
+            font: inherit;
+        }
+
+        .chart-frame {
+            position: relative;
+            min-height: 300px;
+        }
+
+        .chart-note,
+        .muted {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .stat-table th,
+        .stat-table td {
+            white-space: nowrap;
+        }
+
+        .number-cell {
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        @media (max-width: 600px) {
+            .chart-frame {
+                min-height: 250px;
+            }
+
+            .stat-table {
+                min-width: 760px;
+            }
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <h2 class="page-title">Analytics</h2>
+    <p class="analytics-intro">
+        Sales and inventory activity calculated from the records in this database.
+    </p>
+
+    <section class="cards" aria-label="Sales summary">
+        <article class="card">
+            <h3>Sales Transactions</h3>
+            <p class="value">{{ total_sales }}</p>
+        </article>
+        <article class="card">
+            <h3>Total Revenue</h3>
+            <p class="value">₱{{ "{:,.2f}".format(total_revenue) }}</p>
+        </article>
+        <article class="card">
+            <h3>Average Sale</h3>
+            <p class="value">₱{{ "{:,.2f}".format(average_sale) }}</p>
+        </article>
+        <article class="card">
+            <h3>Products with Logged Movement</h3>
+            <p class="value">{{ products_moved }}</p>
+        </article>
+    </section>
+
+    <section class="panel">
+        <div class="panel-heading">
+            <h3 class="section-title">Sales and Revenue Trends</h3>
+            <div class="analytics-controls">
+                <label for="trend-period">Group by</label>
+                <select id="trend-period">
+                    <option value="daily">Day</option>
+                    <option value="weekly">Week</option>
+                    <option value="monthly" selected>Month</option>
+                </select>
+            </div>
+        </div>
+        {% if total_sales %}
+            <div class="chart-frame">
+                <canvas id="sales-trend-chart" aria-label="Sales and revenue trend chart"></canvas>
+            </div>
+            <p class="chart-note">
+                Weekly periods start on Monday. The chart covers the dates between the first and latest sale.
+            </p>
+        {% else %}
+            <p>No sales transactions are available to chart yet.</p>
+        {% endif %}
+    </section>
+
+    <section class="panel">
+        <h3 class="section-title">Top 5 Best-Selling Feed Products</h3>
+        {% if top_sellers %}
+            <div class="chart-frame">
+                <canvas id="top-sellers-chart" aria-label="Top five products by quantity sold"></canvas>
+            </div>
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th class="number-cell">Quantity Sold</th>
+                            <th class="number-cell">Revenue</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for product in top_sellers %}
+                            <tr>
+                                <td>{{ product.name }}</td>
+                                <td class="number-cell">{{ "{:,.2f}".format(product.units_sold) }} {{ product.unit }}</td>
+                                <td class="number-cell">₱{{ "{:,.2f}".format(product.revenue) }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p>No sold products are available to rank yet.</p>
+        {% endif %}
+    </section>
+
+    <section class="panel">
+        <h3 class="section-title">Inventory Movement</h3>
+        <p class="muted">
+            Quantities come from recorded stock additions and sales. Product units are shown separately because feeds can use different units.
+        </p>
+        {% if inventory_movement %}
+            <div class="chart-frame">
+                <canvas id="inventory-movement-chart" aria-label="Recorded stock additions and sales by product"></canvas>
+            </div>
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th class="number-cell">Stock Added</th>
+                            <th class="number-cell">Stock Sold</th>
+                            <th class="number-cell">Net Change</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for product in inventory_movement %}
+                            <tr>
+                                <td>{{ product.name }}</td>
+                                <td class="number-cell">{{ "{:,.2f}".format(product.stock_added) }} {{ product.unit }}</td>
+                                <td class="number-cell">{{ "{:,.2f}".format(product.stock_sold) }} {{ product.unit }}</td>
+                                <td class="number-cell">{{ "{:+,.2f}".format(product.net_change) }} {{ product.unit }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p>No stock additions or sales have been logged yet.</p>
+        {% endif %}
+
+        <h4>Recent Inventory Logs</h4>
+        {% if recent_inventory_logs %}
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date and Time</th>
+                            <th>Product</th>
+                            <th>Action</th>
+                            <th>Quantity</th>
+                            <th>Remarks</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in recent_inventory_logs %}
+                            <tr>
+                                <td>{{ log.timestamp }}</td>
+                                <td>{{ log.product_name }}</td>
+                                <td>{{ log.action }}</td>
+                                <td>{{ "{:,.2f}".format(log.quantity) }} {{ log.unit }}</td>
+                                <td>{{ log.remarks }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p>No inventory log entries are available yet.</p>
+        {% endif %}
+        <p class="muted">{{ inventory_log_count }} inventory log entries are stored in the database.</p>
+    </section>
+
+    <section class="panel">
+        <h3 class="section-title">Descriptive Summary Statistics</h3>
+        {% if descriptive_stats %}
+            <div class="table-scroll">
+                <table class="stat-table">
+                    <thead>
+                        <tr>
+                            <th>Measure</th>
+                            <th class="number-cell">Records</th>
+                            <th class="number-cell">Mean</th>
+                            <th class="number-cell">Median</th>
+                            <th class="number-cell">Std. Deviation</th>
+                            <th class="number-cell">Minimum</th>
+                            <th class="number-cell">Maximum</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for stat in descriptive_stats %}
+                            <tr>
+                                <td>{{ stat.label }}</td>
+                                <td class="number-cell">{{ stat.count }}</td>
+                                <td class="number-cell">₱{{ "{:,.2f}".format(stat.mean) }}</td>
+                                <td class="number-cell">₱{{ "{:,.2f}".format(stat.median) }}</td>
+                                <td class="number-cell">
+                                    {% if stat.std is not none %}
+                                        ₱{{ "{:,.2f}".format(stat.std) }}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </td>
+                                <td class="number-cell">₱{{ "{:,.2f}".format(stat.min) }}</td>
+                                <td class="number-cell">₱{{ "{:,.2f}".format(stat.max) }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <p class="muted">
+                Daily revenue includes zero-sale dates between the first and latest sale. A single observation has no sample standard deviation.
+            </p>
+        {% else %}
+            <p>Summary statistics will appear after sales are recorded.</p>
+        {% endif %}
+    </section>
+{% endblock %}
+
+{% block scripts %}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+    <script>
+        const salesTrends = {{ sales_trends|tojson }};
+        const topSellers = {{ top_sellers|tojson }};
+        const inventoryMovement = {{ inventory_movement|tojson }};
+        const money = value => `₱${Number(value).toLocaleString('en-PH', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        })}`;
+        const quantity = value => Number(value).toLocaleString('en-PH', {
+            maximumFractionDigits: 2
+        });
+
+        const trendCanvas = document.getElementById('sales-trend-chart');
+        if (trendCanvas && window.Chart) {
+            const periodSelect = document.getElementById('trend-period');
+            const trendChart = new Chart(trendCanvas, {
+                type: 'line',
+                data: {
+                    labels: salesTrends[periodSelect.value].labels,
+                    datasets: [
+                        {
+                            label: 'Sales',
+                            data: salesTrends[periodSelect.value].sales,
+                            yAxisID: 'sales',
+                            borderColor: '#2457a7',
+                            backgroundColor: 'rgba(36, 87, 167, 0.12)',
+                            fill: true,
+                            tension: 0.25
+                        },
+                        {
+                            label: 'Revenue',
+                            data: salesTrends[periodSelect.value].revenue,
+                            yAxisID: 'revenue',
+                            borderColor: '#2b8a5a',
+                            backgroundColor: '#2b8a5a',
+                            tension: 0.25
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        sales: {
+                            beginAtZero: true,
+                            position: 'left',
+                            title: { display: true, text: 'Transactions' },
+                            ticks: { precision: 0 }
+                        },
+                        revenue: {
+                            beginAtZero: true,
+                            position: 'right',
+                            title: { display: true, text: 'Revenue (₱)' },
+                            grid: { drawOnChartArea: false },
+                            ticks: { callback: value => `₱${Number(value).toLocaleString('en-PH')}` }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: context => context.dataset.yAxisID === 'revenue'
+                                    ? `Revenue: ${money(context.raw)}`
+                                    : `Sales: ${quantity(context.raw)}`
+                            }
+                        }
+                    }
+                }
+            });
+
+            periodSelect.addEventListener('change', () => {
+                const series = salesTrends[periodSelect.value];
+                trendChart.data.labels = series.labels;
+                trendChart.data.datasets[0].data = series.sales;
+                trendChart.data.datasets[1].data = series.revenue;
+                trendChart.update();
+            });
+        }
+
+        const sellersCanvas = document.getElementById('top-sellers-chart');
+        if (sellersCanvas && window.Chart) {
+            new Chart(sellersCanvas, {
+                type: 'bar',
+                data: {
+                    labels: topSellers.map(product => `${product.name} (${product.unit})`),
+                    datasets: [{
+                        label: 'Quantity sold',
+                        data: topSellers.map(product => product.units_sold),
+                        backgroundColor: '#2457a7'
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { x: { beginAtZero: true } },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: context => `Quantity sold: ${quantity(context.raw)}`
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        const movementCanvas = document.getElementById('inventory-movement-chart');
+        if (movementCanvas && window.Chart) {
+            const chartRows = inventoryMovement.slice(0, 10);
+            new Chart(movementCanvas, {
+                type: 'bar',
+                data: {
+                    labels: chartRows.map(product => `${product.name} (${product.unit})`),
+                    datasets: [
+                        {
+                            label: 'Stock added',
+                            data: chartRows.map(product => product.stock_added),
+                            backgroundColor: '#2b8a5a'
+                        },
+                        {
+                            label: 'Stock sold',
+                            data: chartRows.map(product => product.stock_sold),
+                            backgroundColor: '#d9822b'
+                        }
+                    ]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { beginAtZero: true, stacked: true },
+                        y: { stacked: true }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: context => `${context.dataset.label}: ${quantity(context.raw)}`
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+{% endblock %}

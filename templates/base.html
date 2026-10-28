@@ -216,12 +216,14 @@
             }
         }
     </style>
+    {% block head_extra %}{% endblock %}
 </head>
 <body>
     <header class="site-header">
         <h1>Livestock Feeds Management System</h1>
         <nav aria-label="Main navigation">
             <a href="{{ url_for('dashboard') }}">Dashboard</a>
+            <a href="{{ url_for('analytics') }}">Analytics</a>
             <a href="{{ url_for('index') }}">Inventory</a>
             <a href="{{ url_for('sales') }}">Record Sale</a>
             <a href="{{ url_for('sales_history') }}">Sales History</a>
@@ -230,5 +232,6 @@
     <main>
         {% block content %}{% endblock %}
     </main>
+    {% block scripts %}{% endblock %}
 </body>
 </html>
