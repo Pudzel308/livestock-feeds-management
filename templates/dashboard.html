@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Livestock Feeds Management{% endblock %}
+
+{% block content %}
+    <h2 class="page-title">Dashboard</h2>
+
+    <section class="cards">
+        <article class="card">
+            <h3>Total Sales</h3>
+            <p class="value">{{ total_sales }}</p>
+        </article>
+
+        <article class="card">
+            <h3>Total Revenue</h3>
+            <p class="value">₱{{ "{:,.2f}".format(total_revenue) }}</p>
+        </article>
+
+        <article class="card">
+            <h3>Low-Stock Products</h3>
+            <p class="value">{{ low_stock_count }}</p>
+        </article>
+
+        <article class="card">
+            <h3>Out-of-Stock Products</h3>
+            <p class="value">{{ out_of_stock_count }}</p>
+        </article>
+    </section>
+
+    <section class="panel">
+        <h3 class="section-title">Recent Sales</h3>
+
+        {% if recent_sales %}
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Sale ID</th>
+                            <th>Date and Time</th>
+                            <th>Items</th>
+                            <th>Total Amount</th>
+                            <th>Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for sale in recent_sales %}
+                            <tr>
+                                <td>{{ sale.id }}</td>
+                                <td>{{ sale.timestamp.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+                                <td>{{ sale.items|length }}</td>
+                                <td>₱{{ "{:,.2f}".format(sale.total_amount) }}</td>
+                                <td>
+                                    <a href="{{ url_for(
+                                        'sale_detail', sale_id=sale.id
+                                    ) }}">View</a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p>No sales transactions have been recorded yet.</p>
+        {% endif %}
+    </section>
+{% endblock %}

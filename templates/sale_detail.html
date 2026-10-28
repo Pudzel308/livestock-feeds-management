@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Sale #{{ sale.id }} - Livestock Feeds Management{% endblock %}
+
+{% block content %}
+    <h2 class="page-title">Sale #{{ sale.id }}</h2>
+
+    <section class="panel">
+        <p class="sale-date">
+            Date:
+            {{ sale.timestamp.strftime("%Y-%m-%d %H:%M:%S") }}
+        </p>
+
+        <div class="table-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th>Quantity</th>
+                        <th>Price per Unit</th>
+                        <th>Subtotal</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in sale.items %}
+                        <tr>
+                            <td>{{ item.product.name }}</td>
+                            <td>{{ item.quantity }} {{ item.product.unit }}</td>
+                            <td>₱{{ "%.2f"|format(item.unit_price) }}</td>
+                            <td>₱{{ "%.2f"|format(item.subtotal) }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <h3>Total: ₱{{ "%.2f"|format(sale.total_amount) }}</h3>
+        <div class="detail-actions">
+            <a href="{{ url_for('sales_history') }}">Back to Sales History</a>
+            <a href="{{ url_for('index') }}">Inventory</a>
+        </div>
+    </section>
+{% endblock %}

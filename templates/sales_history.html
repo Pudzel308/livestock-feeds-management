@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block title %}Sales History - Livestock Feeds Management{% endblock %}
+
+{% block content %}
+    <h2 class="page-title">Sales History</h2>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="flash-list">
+                {% for category, message in messages %}
+                    <p class="flash-message flash-{{ category }}">{{ message }}</p>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <section class="panel">
+        {% if sales %}
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Sale ID</th>
+                            <th>Date and Time</th>
+                            <th>Number of Items</th>
+                            <th>Total</th>
+                            <th>Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for sale in sales %}
+                            <tr>
+                                <td>{{ sale.id }}</td>
+                                <td>
+                                    {{ sale.timestamp.strftime("%Y-%m-%d %H:%M:%S") }}
+                                </td>
+                                <td>{{ sale.items|length }}</td>
+                                <td>₱{{ "%.2f"|format(sale.total_amount) }}</td>
+                                <td>
+                                    <a href="{{ url_for(
+                                        'sale_detail', sale_id=sale.id
+                                    ) }}">View</a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p>No sales have been recorded yet.</p>
+        {% endif %}
+    </section>
+{% endblock %}

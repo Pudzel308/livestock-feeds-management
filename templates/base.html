@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Livestock Feeds Management{% endblock %}</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            margin: 24px;
+            color: #222;
+            background: #f7f8fa;
+            line-height: 1.5;
+        }
+
+        .site-header {
+            margin-bottom: 24px;
+        }
+
+        h1 {
+            margin: 0 0 12px;
+            font-size: 26px;
+        }
+
+        nav {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px 16px;
+            padding-bottom: 14px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        nav a,
+        a {
+            color: #2457a7;
+        }
+
+        nav a {
+            text-decoration: none;
+        }
+
+        nav a:hover,
+        a:hover {
+            text-decoration: underline;
+        }
+
+        .page-title {
+            margin: 0 0 20px;
+            font-size: 22px;
+        }
+
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 16px;
+            margin: 20px 0 32px;
+        }
+
+        .card,
+        .panel {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .card h3,
+        .section-title {
+            margin: 0 0 12px;
+            font-size: 15px;
+            color: #555;
+        }
+
+        .value {
+            margin: 0;
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .panel {
+            margin-bottom: 24px;
+        }
+
+        .panel .section-title {
+            margin-bottom: 16px;
+        }
+
+        .table-scroll {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            min-width: 620px;
+            border-collapse: collapse;
+            background: #fff;
+        }
+
+        th,
+        td {
+            padding: 12px;
+            border: 1px solid #ddd;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        th {
+            background: #eee;
+        }
+
+        input,
+        button {
+            font: inherit;
+        }
+
+        input {
+            min-width: 0;
+            max-width: 100%;
+            padding: 8px 10px;
+            border: 1px solid #bbb;
+            border-radius: 4px;
+        }
+
+        input:disabled {
+            background: #f0f0f0;
+            color: #666;
+        }
+
+        button {
+            padding: 8px 12px;
+            color: #fff;
+            background: #2457a7;
+            border: 1px solid #2457a7;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #1d4789;
+        }
+
+        .inline-form {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            min-width: 320px;
+        }
+
+        .inline-form input {
+            flex: 1 1 130px;
+        }
+
+        .flash-list {
+            margin: 0 0 20px;
+        }
+
+        .flash-message {
+            margin: 0 0 8px;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background: #fff;
+        }
+
+        .flash-success {
+            border-color: #b7d7c1;
+            background: #f0f8f2;
+        }
+
+        .flash-error {
+            border-color: #e3b8b8;
+            background: #fff3f3;
+        }
+
+        .sale-date {
+            margin-top: 0;
+        }
+
+        .detail-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px 16px;
+        }
+
+        @media (max-width: 800px) {
+            body {
+                margin: 12px;
+            }
+
+            .cards {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .panel,
+            .card {
+                padding: 16px;
+            }
+        }
+
+        @media (max-width: 450px) {
+            .cards {
+                grid-template-columns: 1fr;
+            }
+
+            h1 {
+                font-size: 22px;
+            }
+
+            .page-title {
+                font-size: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="site-header">
+        <h1>Livestock Feeds Management System</h1>
+        <nav aria-label="Main navigation">
+            <a href="{{ url_for('dashboard') }}">Dashboard</a>
+            <a href="{{ url_for('index') }}">Inventory</a>
+            <a href="{{ url_for('sales') }}">Record Sale</a>
+            <a href="{{ url_for('sales_history') }}">Sales History</a>
+        </nav>
+    </header>
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>

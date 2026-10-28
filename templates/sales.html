@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Record Sale - Livestock Feeds Management{% endblock %}
+
+{% block content %}
+    <h2 class="page-title">Record Sale</h2>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="flash-list">
+                {% for category, message in messages %}
+                    <p class="flash-message flash-{{ category }}">{{ message }}</p>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <form method="POST">
+        <section class="panel">
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Feed Product</th>
+                            <th>Price</th>
+                            <th>Available Stock</th>
+                            <th>Quantity to Sell</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for product in products %}
+                            <tr>
+                                <td>{{ product.name }}</td>
+                                <td>₱{{ "%.2f"|format(product.unit_price) }}</td>
+                                <td>
+                                    {{ product.stock_quantity }} {{ product.unit }}
+                                </td>
+                                <td>
+                                    <input
+                                        type="number"
+                                        name="quantity_{{ product.id }}"
+                                        min="0.01"
+                                        step="0.01"
+                                        max="{{ product.stock_quantity }}"
+                                        {% if product.stock_quantity <= 0 %}
+                                            disabled
+                                            placeholder="Out of stock"
+                                        {% else %}
+                                            placeholder="0"
+                                        {% endif %}
+                                    >
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <p>
+                Leave quantities blank for products you do not want to sell.
+            </p>
+            <button type="submit">Complete Sale</button>
+        </section>
+    </form>
+{% endblock %}
