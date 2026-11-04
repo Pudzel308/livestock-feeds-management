@@ -2,6 +2,20 @@
 
 {% block title %}Dashboard - Livestock Feeds Management{% endblock %}
 
+{% block head_extra%}
+    <style>
+        .chart-frame {
+            position: relative;
+            min-height: 300px;
+        }
+
+        .number-cell {
+            text-align: right;
+            white-space: nowrap;
+        }
+    </style>
+{% endblock %}
+
 {% block content %}
     <h2 class="page-title">Dashboard</h2>
 
@@ -24,6 +38,10 @@
         <article class="card">
             <h3>Out-of-Stock Products</h3>
             <p class="value">{{ out_of_stock_count }}</p>
+        </article>
+        <article class="card">
+            <h3>Products with Logged Movement</h3>
+            <p class="value">{{ products_moved }}</p>
         </article>
     </section>
 
@@ -63,4 +81,114 @@
             <p>No sales transactions have been recorded yet.</p>
         {% endif %}
     </section>
+    <section class="panel">
+        <h3 class="section-title">Inventory Movement</h3>
+        {% if inventory_movement %}
+        <div class="chart-frame">
+            <canvas id="inventory-movement-chart" aria-label="Recorded stock additions and sales by product"></canvas>
+        </div>
+        <div class="table-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th class="number-cell">Stock Added</th>
+                        <th class="number-cell">Stock Sold</th>
+                        <th class="number-cell">Net Change</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for product in inventory_movement %}
+                    <tr>
+                        <td>{{ product.name }}</td>
+                        <td class="number-cell">{{ "{:,.2f}".format(product.stock_added) }} {{ product.unit }}</td>
+                        <td class="number-cell">{{ "{:,.2f}".format(product.stock_sold) }} {{ product.unit }}</td>
+                        <td class="number-cell">{{ "{:+,.2f}".format(product.net_change) }} {{ product.unit }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p>No stock additions or sales have been logged yet.</p>
+        {% endif %}
+
+        <h4>Recent Inventory Logs</h4>
+        {% if recent_inventory_logs %}
+        <div class="table-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date and Time</th>
+                        <th>Product</th>
+                        <th>Action</th>
+                        <th>Quantity</th>
+                        <th>Remarks</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in recent_inventory_logs %}
+                    <tr>
+                        <td>{{ log.timestamp }}</td>
+                        <td>{{ log.product_name }}</td>
+                        <td>{{ log.action }}</td>
+                        <td>{{ "{:,.2f}".format(log.quantity) }} {{ log.unit }}</td>
+                        <td>{{ log.remarks }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p>No inventory log entries are available yet.</p>
+        {% endif %}
+    </section>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+    const inventoryMovement = {{ inventory_movement|tojson }};
+    const movementCanvas = document.getElementById('inventory-movement-chart');
+    const quantity = value => Number(value).toLocaleString('en-PH', {
+        maximumFractionDigits: 2
+    });
+    if (movementCanvas && window.Chart) {
+        const chartRows = inventoryMovement.slice(0, 10);
+        new Chart(movementCanvas, {
+            type: 'bar',
+            data: {
+                labels: chartRows.map(product => `${product.name} (${product.unit})`),
+                datasets: [
+                    {
+                        label: 'Stock added',
+                        data: chartRows.map(product => product.stock_added),
+                        backgroundColor: '#2b8a5a'
+                    },
+                    {
+                        label: 'Stock sold',
+                        data: chartRows.map(product => product.stock_sold),
+                        backgroundColor: '#d9822b'
+                    }
+                ]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { beginAtZero: true, stacked: true },
+                    y: { stacked: true }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: context => `${context.dataset.label}: ${quantity(context.raw)}`
+                        }
+                    }
+                }
+            }
+        });
+    }
+</script>
 {% endblock %}

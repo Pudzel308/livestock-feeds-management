@@ -35,9 +35,5 @@
         </div>
 
         <h3>Total: ₱{{ "%.2f"|format(sale.total_amount) }}</h3>
-        <div class="detail-actions">
-            <a href="{{ url_for('sales_history') }}">Back to Sales History</a>
-            <a href="{{ url_for('index') }}">Inventory</a>
-        </div>
     </section>
 {% endblock %}

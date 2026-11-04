@@ -52,6 +52,10 @@ def dashboard():
         .limit(5)
     ).scalars().all()
 
+    inventory_movement, recent_inventory_logs, inventory_log_count = (
+        _get_inventory_data()
+    )
+
     return render_template(
         "dashboard.html",
         total_sales=total_sales,
@@ -59,6 +63,9 @@ def dashboard():
         low_stock_count=low_stock_count,
         out_of_stock_count=out_of_stock_count,
         recent_sales=recent_sales,
+        inventory_movement=inventory_movement,
+        recent_inventory_logs=recent_inventory_logs,
+        products_moved=len(inventory_movement)
     )
 
 @app.route("/")
@@ -67,7 +74,10 @@ def index():
         select(FeedProduct).order_by(FeedProduct.name)
     ).scalars().all()
 
-    return render_template("index.html", products=products)
+    return render_template(
+        "index.html", 
+        products=products,
+    )
 
 
 @app.route("/products/<int:product_id>/add-stock", methods=["POST"])
@@ -378,6 +388,28 @@ def analytics():
         "monthly": _build_sales_trend(sales_frame, "M", "%b %Y"),
     }
 
+    daily_revenue = sales_trends["daily"]["revenue"]
+    descriptive_stats = []
+    if not sales_frame.empty:
+        descriptive_stats = [
+            _describe_values("Sale amount (₱)", sales_frame["total_amount"]),
+            _describe_values("Daily revenue (₱)", daily_revenue),
+        ]
+
+    total_revenue = float(sales_frame["total_amount"].sum()) if not sales_frame.empty else 0.0
+    total_sales = int(len(sales_frame))
+
+    return render_template(
+        "analytics.html",
+        total_sales=total_sales,
+        total_revenue=round(total_revenue, 2),
+        average_sale=round(total_revenue / total_sales, 2) if total_sales else 0.0,
+        sales_trends=sales_trends,
+        top_sellers=top_sellers,
+        descriptive_stats=descriptive_stats,
+    )
+
+def _get_inventory_data():
     inventory_rows = db.session.execute(
         select(
             InventoryLog.timestamp,
@@ -456,30 +488,6 @@ def analytics():
             }
             for row in latest_logs.itertuples(index=False)
         ]
-
-    daily_revenue = sales_trends["daily"]["revenue"]
-    descriptive_stats = []
-    if not sales_frame.empty:
-        descriptive_stats = [
-            _describe_values("Sale amount (₱)", sales_frame["total_amount"]),
-            _describe_values("Daily revenue (₱)", daily_revenue),
-        ]
-
-    total_revenue = float(sales_frame["total_amount"].sum()) if not sales_frame.empty else 0.0
-    total_sales = int(len(sales_frame))
-
-    return render_template(
-        "analytics.html",
-        total_sales=total_sales,
-        total_revenue=round(total_revenue, 2),
-        average_sale=round(total_revenue / total_sales, 2) if total_sales else 0.0,
-        products_moved=len(inventory_movement),
-        inventory_log_count=len(inventory_frame),
-        sales_trends=sales_trends,
-        top_sellers=top_sellers,
-        inventory_movement=inventory_movement,
-        recent_inventory_logs=recent_inventory_logs,
-        descriptive_stats=descriptive_stats,
-    )
+    return inventory_movement, recent_inventory_logs, len(inventory_frame)
 if __name__ == "__main__":
     app.run(debug=True)
