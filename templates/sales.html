@@ -2,6 +2,14 @@
 
 {% block title %}Record Sale - Livestock Feeds Management{% endblock %}
 
+{% block head_extra %}
+    <style>
+        .panel button {
+            margin-top: 20px;
+        }
+    </style>
+{% endblock %}
+
 {% block content %}
     <h2 class="page-title">Record Sale</h2>
 
@@ -28,7 +36,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for product in products %}
+                        {% for product in products | sort(attribute='stock_quantity', reverse=true) %}
                             <tr>
                                 <td>{{ product.name }}</td>
                                 <td>₱{{ "%.2f"|format(product.unit_price) }}</td>

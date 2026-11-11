@@ -9,11 +9,8 @@ from flask import (
 )
 from sqlalchemy import select, func
 from sqlalchemy.exc import SQLAlchemyError
-
-import pandas as pd
-
 from models import db, FeedProduct, InventoryLog, Sale, SaleItem
-
+import pandas as pd
 
 app = Flask(__name__)
 
@@ -68,11 +65,21 @@ def dashboard():
         products_moved=len(inventory_movement)
     )
 
+
 @app.route("/")
 def index():
-    products = db.session.execute(
-        select(FeedProduct).order_by(FeedProduct.name)
-    ).scalars().all()
+    selected_category = request.args.get('filter')
+
+    if selected_category:
+         products = db.session.execute(
+            select(FeedProduct)
+            .where(FeedProduct.category == selected_category)
+            .order_by(FeedProduct.name)
+        ).scalars().all()       
+    else:
+        products = db.session.execute(
+            select(FeedProduct).order_by(FeedProduct.name)
+        ).scalars().all()
 
     return render_template(
         "index.html", 
@@ -272,8 +279,6 @@ def sale_detail(sale_id):
 
 with app.app_context():
     db.create_all()
-
-
 
 
 def _build_sales_trend(sales_frame, frequency, label_format):
@@ -489,5 +494,6 @@ def _get_inventory_data():
             for row in latest_logs.itertuples(index=False)
         ]
     return inventory_movement, recent_inventory_logs, len(inventory_frame)
+
 if __name__ == "__main__":
     app.run(debug=True)
