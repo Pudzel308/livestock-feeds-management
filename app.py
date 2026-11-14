@@ -1,4 +1,3 @@
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from flask import (
     abort,
     Flask,
@@ -8,10 +7,24 @@ from flask import (
     url_for,
     flash,
 )
+from models import (
+    db, 
+    FeedProduct, 
+    InventoryLog, 
+    Sale, 
+    SaleItem, 
+    User
+)
+from flask_login import (
+    LoginManager, 
+    current_user, 
+    login_required, 
+    login_user, 
+    logout_user
+)
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from sqlalchemy import select, func
 from sqlalchemy.exc import SQLAlchemyError
-from models import db, FeedProduct, InventoryLog, Sale, SaleItem, User
-from flask_login import LoginManager, current_user, login_required, login_user, logout_user
 from functools import wraps
 import pandas as pd
 
@@ -399,6 +412,7 @@ def _describe_values(label, values):
 
 @app.route("/analytics")
 @login_required
+@roles_required("admin")
 def analytics():
     sales_rows = db.session.execute(
         select(Sale.id, Sale.timestamp, Sale.total_amount)
@@ -566,7 +580,16 @@ def _get_inventory_data():
 @login_required
 @roles_required("admin")
 def staff_management():
-    return render_template("staff_management.html")
+    staff_members = db.session.execute(
+        select(User)
+        .where(User.role == "staff")
+        .order_by(User.username)
+    ).scalars().all()
+
+    return render_template(
+        "staff_management.html",
+        staff_members=staff_members
+    )
 
 if __name__ == "__main__":
     app.run(debug=True)

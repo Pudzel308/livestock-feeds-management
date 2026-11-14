@@ -7,6 +7,33 @@
 
 <section class="panel">
     <h3 class="section-title">Staffs</h3>
+
+    {% if staff_members %}
+    <table>
+        <thead>
+            <tr>
+                <th>Username</th>
+                <th>Status</th>
+                <th>Control</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for staff in staff_members %}
+            <tr>
+                <td>{{ staff.username }}</td>
+                <td>{{ "Enabled" if staff.enabled else "Disabled" }}</td>
+                <td>
+                    <form>
+                        <button>Disable</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No staff accounts found.</p>
+    {% endif %}
 </section>
 
 {% endblock %}

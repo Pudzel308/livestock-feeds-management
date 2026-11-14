@@ -21,9 +21,17 @@
             margin-bottom: 24px;
         }
 
-        h1 {
+        .top-row {
+            display: flex;
+        }
+
+        .top-row h1 {
             margin: 0 0 12px;
             font-size: 26px;
+        }
+
+        .top-row form {
+            margin-left: 60px;
         }
 
         nav {
@@ -220,14 +228,25 @@
 </head>
 <body>
     <header class="site-header">
-        <h1>Livestock Feeds Management System</h1>
+        <div class="top-row">
+            <h1>Livestock Feeds Management System</h1>
+
+            <form method="POST" action="{{ url_for('logout') }}">
+                <button type="submit">Log out</button>
+            </form>
+        </div>
+
         <nav aria-label="Main navigation">
             <a href="{{ url_for('dashboard') }}">Dashboard</a>
-            <a href="{{ url_for('analytics') }}">Analytics</a>
+            {% if current_user.role == "admin" %}
+                <a href="{{ url_for('analytics') }}">Analytics</a>
+            {% endif %}
             <a href="{{ url_for('index') }}">Inventory</a>
             <a href="{{ url_for('sales') }}">Record Sale</a>
             <a href="{{ url_for('sales_history') }}">Sales History</a>
-            <a href="{{ url_for('staff_management') }}">Staffs</a>
+            {% if current_user.role == "admin" %}
+                <a href="{{ url_for('staff_management') }}">Staffs</a>
+            {% endif %}
         </nav>
     </header>
     <main>
