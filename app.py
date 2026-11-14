@@ -1,5 +1,6 @@
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from flask import (
+    abort,
     Flask,
     render_template,
     request,
@@ -10,6 +11,8 @@ from flask import (
 from sqlalchemy import select, func
 from sqlalchemy.exc import SQLAlchemyError
 from models import db, FeedProduct, InventoryLog, Sale, SaleItem
+from flask_login import LoginManager, current_user, login_required
+from functools import wraps
 import pandas as pd
 
 app = Flask(__name__)
@@ -18,7 +21,28 @@ app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///livestock.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SECRET_KEY"] = "susi-ng-mga-it"
 
+login_manager = LoginManager()
+login_manager.login_view = "login"
+login_manager.init_app(app)
+
 db.init_app(app)
+
+def roles_required(*roles):
+    def decorator(view):
+        @wraps(view)
+        @login_required
+        def wrapped(*args, **kwargs):
+            if current_user.role not in roles:
+                abort(403)
+            return view(*args, **kwargs)
+        return wrapped
+    return decorator
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    return db.session.get(User, int(user_id))
+
 
 @app.route("/dashboard")
 def dashboard():
@@ -496,6 +520,7 @@ def _get_inventory_data():
     return inventory_movement, recent_inventory_logs, len(inventory_frame)
 
 @app.route("/staff")
+@roles_required("admin")
 def staff_management():
     return render_template("staff_management.html")
 
