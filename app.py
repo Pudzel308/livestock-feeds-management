@@ -10,8 +10,8 @@ from flask import (
 )
 from sqlalchemy import select, func
 from sqlalchemy.exc import SQLAlchemyError
-from models import db, FeedProduct, InventoryLog, Sale, SaleItem
-from flask_login import LoginManager, current_user, login_required
+from models import db, FeedProduct, InventoryLog, Sale, SaleItem, User
+from flask_login import LoginManager, current_user, login_required, login_user, logout_user
 from functools import wraps
 import pandas as pd
 
@@ -20,6 +20,9 @@ app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///livestock.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SECRET_KEY"] = "susi-ng-mga-it"
+app.config["SESSION_PERMANENT"] = False
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
 login_manager = LoginManager()
 login_manager.login_view = "login"
@@ -40,11 +43,45 @@ def roles_required(*roles):
 
 
 @login_manager.user_loader
-def load_user(user_id):
+def load_user(user_id, remember=False):
     return db.session.get(User, int(user_id))
 
 
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+
+        user = db.session.execute(
+            select(User).where(User.username == username)
+        ).scalar_one_or_none()
+
+        if user is None or not user.check_password(password):
+            flash("Invalid username or password.", "error")
+            return redirect(url_for("login"))
+
+        if not user.enabled:
+            flash("This account is disabled.", "error")
+            return redirect(url_for("login"))
+
+        login_user(user)
+        flash("Logged in successfully.", "success")
+        return redirect(url_for("dashboard"))
+
+    return render_template("login.html")
+
+
+@app.route("/logout", methods=["POST"])
+@login_required
+def logout():
+    logout_user()
+    flash("You have been logged out.", "success")
+    return redirect(url_for("login"))
+
+
 @app.route("/dashboard")
+@login_required
 def dashboard():
     total_sales = db.session.scalar(
         select(func.count(Sale.id))
@@ -91,6 +128,7 @@ def dashboard():
 
 
 @app.route("/")
+@login_required
 def index():
     selected_category = request.args.get('filter')
 
@@ -112,6 +150,7 @@ def index():
 
 
 @app.route("/products/<int:product_id>/add-stock", methods=["POST"])
+@login_required
 def add_stock(product_id):
     quantity = request.form.get("quantity", type=float)
     remarks = request.form.get("remarks", "").strip()
@@ -149,6 +188,7 @@ def add_stock(product_id):
 
 
 @app.route("/sales", methods=["GET", "POST"])
+@login_required
 def sales():
     products = db.session.execute(
         select(FeedProduct).order_by(FeedProduct.name)
@@ -282,6 +322,7 @@ def sales():
 
 
 @app.route("/sales/history")
+@login_required
 def sales_history():
     all_sales = db.session.execute(
         select(Sale).order_by(Sale.timestamp.desc(), Sale.id.desc())
@@ -291,6 +332,7 @@ def sales_history():
 
 
 @app.route("/sales/<int:sale_id>")
+@login_required
 def sale_detail(sale_id):
     sale = db.session.get(Sale, sale_id)
 
@@ -356,6 +398,7 @@ def _describe_values(label, values):
 
 
 @app.route("/analytics")
+@login_required
 def analytics():
     sales_rows = db.session.execute(
         select(Sale.id, Sale.timestamp, Sale.total_amount)
@@ -520,6 +563,7 @@ def _get_inventory_data():
     return inventory_movement, recent_inventory_logs, len(inventory_frame)
 
 @app.route("/staff")
+@login_required
 @roles_required("admin")
 def staff_management():
     return render_template("staff_management.html")

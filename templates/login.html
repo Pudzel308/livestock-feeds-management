@@ -1,2 +1,75 @@
-{% block title %}Inventory - Livestock Feeds Management{% endblock %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Livestock Feeds Management</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f7f8fa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .login-box {
+            width: 100%;
+            max-width: 420px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 28px;
+        }
+        h2 {
+            margin-top: 0;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        input, button {
+            font: inherit;
+            padding: 10px 12px;
+            border-radius: 6px;
+        }
+        input {
+            border: 1px solid #bbb;
+        }
+        button {
+            background: #2457a7;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+        }
+        .flash-message {
+            margin-bottom: 12px;
+            padding: 10px;
+            border-radius: 6px;
+            background: #fff3f3;
+            border: 1px solid #e3b8b8;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <h2>Login</h2>
 
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash-message">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST" action="{{ url_for('login') }}">
+            <input type="text" name="username" placeholder="Username" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <button type="submit">Sign In</button>
+        </form>
+    </div>
+</body>
+</html>
