@@ -143,22 +143,37 @@ def dashboard():
 @app.route("/")
 @login_required
 def index():
-    selected_category = request.args.get('filter')
+    selected_category = request.args.get("filter", "").strip()
+    search = request.args.get("search", "").strip()
+
+    query = select(FeedProduct)
+    conditions = []
 
     if selected_category:
-         products = db.session.execute(
-            select(FeedProduct)
-            .where(FeedProduct.category == selected_category)
-            .order_by(FeedProduct.name)
-        ).scalars().all()       
-    else:
-        products = db.session.execute(
-            select(FeedProduct).order_by(FeedProduct.name)
-        ).scalars().all()
+        conditions.append(FeedProduct.category == selected_category)
+
+    if search:
+        pattern = f"%{search}%"
+        conditions.append(
+            (FeedProduct.name.ilike(pattern))
+            | (FeedProduct.category.ilike(pattern))
+        )
+
+    if conditions:
+        query = query.where(*conditions)
+
+    products = db.session.execute(
+        query.order_by(FeedProduct.name)
+    ).scalars().all()
+
+    product_suggestions = db.session.execute(
+        select(FeedProduct).order_by(FeedProduct.name)
+    ).scalars().all()
 
     return render_template(
-        "index.html", 
+        "index.html",
         products=products,
+        product_suggestions=product_suggestions,
     )
 
 
@@ -197,6 +212,55 @@ def add_stock(product_id):
         db.session.rollback()
         flash("Error updating stock.", "error")
 
+    return redirect(url_for("index"))
+
+
+@app.route("/quick-add-stock", methods=["POST"])
+@login_required
+def quick_add_stock():
+    product_name = request.form.get("product-name", "").strip()
+    raw_quantity = request.form.get("quantity", "").strip()
+    remarks = request.form.get("remarks", "").strip()
+
+    product = db.session.execute(
+        select(FeedProduct).where(
+            func.lower(FeedProduct.name) == product_name.lower()
+        )
+    ).scalar_one_or_none()
+
+    if product is None:
+        flash("Choose a product from the suggestions.", "error")
+        return redirect(url_for("index"))
+
+    try:
+        quantity_decimal = Decimal(raw_quantity)
+    except InvalidOperation:
+        flash("Enter a valid quantity.", "error")
+        return redirect(url_for("index"))
+
+    if not quantity_decimal.is_finite() or quantity_decimal <= 0:
+        flash("Enter a quantity greater than zero.", "error")
+        return redirect(url_for("index"))
+
+    quantity = float(quantity_decimal)
+
+    try:
+        product.stock_quantity += quantity
+        db.session.add(
+            InventoryLog(
+                product_id=product.id,
+                action_type="stock_added",
+                quantity=quantity,
+                remarks=remarks or "Quick stock addition",
+            )
+        )
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        flash("Could not update stock. Please try again.", "error")
+        return redirect(url_for("index"))
+
+    flash(f"Added {quantity:g} {product.unit} to {product.name}.", "success")
     return redirect(url_for("index"))
 
 
@@ -615,7 +679,7 @@ def enable_staff(user_id):
     if staff is None or staff.role != "staff":
         abort(404)
 
-    staff.enabled = False
+    staff.enabled = True
     db.session.commit()
 
     flash(f"Staff account {staff.username} enabled.", "success")

@@ -12,6 +12,7 @@
     <table>
         <thead>
             <tr>
+                <th>Id</th>
                 <th>Username</th>
                 <th>Status</th>
                 <th>Control</th>
@@ -20,16 +21,17 @@
         <tbody>
             {% for staff in staff_members %}
             <tr>
+                <td>{{ staff.id }}</td>
                 <td>{{ staff.username }}</td>
                 <td>{{ "Enabled" if staff.enabled else "Disabled" }}</td>
                 <td>
                     {% if staff.enabled %}
                         <form method="POST" action="{{ url_for('disable_staff', user_id=staff.id) }}">
-                            <button type="submit">Disable</button>
+                            <button type="submit" style="background: #ff3333; border: 0px;">Disable</button>
                         </form>
                     {% else %}
                         <form method="POST" action="{{ url_for('enable_staff', user_id=staff.id) }}">
-                            <button type="submit">Enable</button>
+                            <button type="submit" style="border: 0px;">Enable</button>
                         </form>
                     {% endif %}
                 </td>

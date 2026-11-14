@@ -8,15 +8,53 @@
         * {
             box-sizing: border-box;
         }
-
-        body {
-            font-family: Arial, sans-serif;
-            margin: 24px;
-            color: #222;
-            background: #f7f8fa;
-            line-height: 1.5;
+        :root {
+            --page-background: #f7f8fa;
+            --panel-background: #fff;
+            --text-color: #222;
+            --muted-color: #555;
+            --border-color: #ddd;
+            --accent-color: #2457a7;
+            --accent-hover: #1d4789;
         }
 
+        body.role-admin {
+            --accent-color: #3333ff;
+            --accent-hover: #6666ff;
+        }
+
+        body.role-staff {
+            --accent-color: #247a52;
+            --accent-hover: #1c6040;
+        }
+
+        body {
+            color: var(--text-color);
+            background: var(--page-background);
+        }
+
+        .card, .panel {
+            background: var(--panel-background);
+            border-color: var(--border-color);
+        }
+
+        nav a, a {
+            color: var(--accent-color);
+        }
+
+        button {
+            color: white;
+            padding: 8px 12px;
+            background: var(--accent-color);
+            border: 0px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: var(--accent-hover);
+        }
+    
         .site-header {
             margin-bottom: 24px;
         }
@@ -30,7 +68,7 @@
             font-size: 26px;
         }
 
-        .top-row form {
+        .top-row button {
             margin-left: 60px;
         }
 
@@ -42,17 +80,11 @@
             border-bottom: 1px solid #ddd;
         }
 
-        nav a,
-        a {
-            color: #2457a7;
-        }
-
         nav a {
             text-decoration: none;
         }
 
-        nav a:hover,
-        a:hover {
+        nav a:hover, a:hover {
             text-decoration: underline;
         }
 
@@ -68,16 +100,14 @@
             margin: 20px 0 32px;
         }
 
-        .card,
-        .panel {
+        .card, .panel {
             background: #fff;
             border: 1px solid #ddd;
             border-radius: 8px;
             padding: 20px;
         }
 
-        .card h3,
-        .section-title {
+        .card h3, .section-title {
             margin: 0 0 12px;
             font-size: 15px;
             color: #555;
@@ -109,8 +139,7 @@
             background: #fff;
         }
 
-        th,
-        td {
+        th, td {
             padding: 12px;
             border: 1px solid #ddd;
             text-align: left;
@@ -121,8 +150,7 @@
             background: #eee;
         }
 
-        input,
-        button {
+        input, button {
             font: inherit;
         }
 
@@ -137,19 +165,6 @@
         input:disabled {
             background: #f0f0f0;
             color: #666;
-        }
-
-        button {
-            padding: 8px 12px;
-            color: #fff;
-            background: #2457a7;
-            border: 1px solid #2457a7;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-
-        button:hover {
-            background: #1d4789;
         }
 
         .inline-form {
@@ -195,6 +210,24 @@
             gap: 8px 16px;
         }
 
+        dialog {
+            width: min(90%, 420px);
+            border: 0;
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 8px 30px rgb(0 0 0 / 25%);
+        }
+
+        dialog::backdrop {
+            background: rgb(0 0 0 / 45%);
+        }
+
+        dialog div {
+            display: flex;
+            justify-content: right;
+            gap: 20px;
+        }
+
         @media (max-width: 800px) {
             body {
                 margin: 12px;
@@ -226,14 +259,12 @@
     </style>
     {% block head_extra %}{% endblock %}
 </head>
-<body>
+<body class="{{ 'role-admin' if current_user.is_authenticated and current_user.role == 'admin' else 'role-staff' }}">
     <header class="site-header">
         <div class="top-row">
             <h1>Livestock Feeds Management System</h1>
 
-            <form method="POST" action="{{ url_for('logout') }}">
-                <button type="submit">Log out</button>
-            </form>
+            <button onClick="document.getElementById('prompt').showModal()">Log out</button>
         </div>
 
         <nav aria-label="Main navigation">
@@ -249,9 +280,41 @@
             {% endif %}
         </nav>
     </header>
+
+    <dialog id="prompt">
+        <h2>Are you sure?</h2>
+        <p>You are about to logout.</p>
+        <div>
+            <form method="POST" action="{{ url_for('logout') }}">
+                <button type="submit">Log out</button>
+            </form>
+            <button onClick="document.getElementById('prompt').close()">Cancel</button>
+        </div>
+    </dialog>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="flash-list">
+        {% for category, message in messages %}
+        <p class="flash-message flash-{{ category }}">{{ message }}</p>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
     <main>
         {% block content %}{% endblock %}
     </main>
     {% block scripts %}{% endblock %}
 </body>
+
+<script>
+    const dialog = document.getElementById("prompt");
+
+    dialog.addEventListener("click", (event) => {
+        if (event.target === dialog) {
+            dialog.close();
+        }
+    });
+</script>
 </html>

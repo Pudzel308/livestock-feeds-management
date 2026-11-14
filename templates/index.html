@@ -4,16 +4,45 @@
 
 {% block head_extra%}
     <style>
-        .chart-frame {
-            position: relative;
-            min-height: 300px;
+        .index-toolbar {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
         }
 
         .filters {
             display: flex;
-            justify-content: center;
+            width: auto;
+            justify-content: right;
             margin-top: 10px;
             margin-bottom: 10px;
+        }
+
+        .filters button {
+            border: 0px;
+        }
+
+        .quick-add-toolbar {
+            display: flex;
+            flex: 0 0 auto;
+            justify-content: right;
+            align-items: center;
+            margin-top: 10px;
+            margin-bottom: 10px;
+            width: auto;
+        }
+
+        .quick-add-toolbar button {
+            width: auto;
+            align-self: right;
+            white-space: nowrap;
+        }
+
+        .chart-frame {
+            position: relative;
+            min-height: 300px;
         }
 
         .filters form select{
@@ -25,39 +54,86 @@
             margin-left: 5px;
             margin-right: 5px;
         }
+
+        dialog {
+            width: min(90%, 420px);
+            border: 0;
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 8px 30px rgb(0 0 0 / 25%);
+        }
+
+        dialog input {
+            margin-bottom: 20px;
+        }
+
+        dialog::backdrop {
+            background: rgb(0 0 0 / 45%);
+        }
     </style>
 {% endblock %}
 
 {% block content %}
 <h2 class="page-title">Feed Inventory</h2>
 
-{% with messages = get_flashed_messages(with_categories=true) %}
-{% if messages %}
-<div class="flash-list">
-    {% for category, message in messages %}
-    <p class="flash-message flash-{{ category }}">{{ message }}</p>
-    {% endfor %}
-</div>
-{% endif %}
-{% endwith %}
+<div class="index-toolbar">
+    <div class="filters">
+        <form method="GET" action="{{ url_for('index') }}">
+            <select name="filter" onChange="this.form.submit()">
+                <option value="">-- All Categories --</option>
+                <option value="Hog Feeds" {% if request.args.get('filter') == 'Hog Feeds' %}selected{% endif %}>Hog Feeds</option>
+                <option value="Poultry" {% if request.args.get('filter') == 'Poultry' %}selected{% endif %}>Poultry</option>
+                <option value="Feeds" {% if request.args.get('filter') == 'Feeds' %}selected{% endif %}>Feeds</option>
+                <option value="Swine" {% if request.args.get('filter') == 'Swine' %}selected{% endif %}>Swine</option>
+            </select>
+            <input
+                type="search"
+                name="search"
+                placeholder="Search"
+                value="{{ request.args.get('search', '') }}"
+            >
+            <button type="submit">Search</button>
+        </form>
 
-<div class="filters">
-    <form method="GET" action="">
-        <select name="filter" onChange="this.form.submit()">
-            <option value="">-- All Categories --</option>
-            <option value="Hog Feeds" {% if request.args.get('filter') == 'Hog Feeds' %}selected{% endif %}>Hog Feeds</option>
-            <option value="Poultry" {% if request.args.get('filter') == 'Poultry' %}selected{% endif %}>Poultry</option>
-            <option value="Feeds" {% if request.args.get('filter') == 'Feeds' %}selected{% endif %}>Feeds</option>
-            <option value="Swine" {% if request.args.get('filter') == 'Swine' %}selected{% endif %}>Swine</option>
-        </select>
+    </div>
+    <div class="quick-add-toolbar">
+        <button class="quick-add-button" onClick="document.getElementById('quick-add').showModal()">Quick Add Stock</button>
+    </div>
+</div>
+
+<dialog id="quick-add">
+    <h2>Add Stock</h2>
+    <form action="{{ url_for('quick_add_stock') }}" method="POST">
+        <input 
+            id="quick-product-name"
+            type="text"
+            name="product-name"
+            list="product-suggestions"
+            placeholder="product name"
+            autocomplete="off"
+            required
+        >
+        <datalist id="product-suggestions">
+            {% for product in product_suggestions %}
+                <option value="{{ product.name }}">
+            {% endfor %}
+        </datalist>
+        <input
+            type="number"
+            name="quantity"
+            min="0.01"
+            step="0.01"
+            placeholder="Quantity"
+            required
+        >
+        <input
+            type="text"
+            name="remarks"
+            placeholder="Remarks (optional)"
+        >
+        <button type="submit">Add Stock</button>
     </form>
-    <input
-        type="text"
-        name="search"
-        placeholder="Search"
-    >
-</div>
-
+</dialog>
 
 <section class="panel">
     <div class="table-scroll">
@@ -69,7 +145,6 @@
                     <th>Price per Unit</th>
                     <th>Current Stock</th>
                     <th>Status</th>
-                    <th>Add Stock</th>
                 </tr>
             </thead>
             <tbody>
@@ -94,24 +169,6 @@
                         In Stock
                         {% endif %}
                     </td>
-                    <td>
-                        <form class="inline-form" action="{{ url_for('add_stock', product_id=product.id) }}" method="POST">
-                            <input
-                                type="number"
-                                name="quantity"
-                                min="0.01"
-                                step="0.01"
-                                placeholder="Quantity"
-                                required
-                            >
-                            <input
-                                type="text"
-                                name="remarks"
-                                placeholder="Remarks (optional)"
-                            >
-                            <button type="submit">Add Stock</button>
-                        </form>
-                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -119,3 +176,36 @@
     </div>
 </section>
 {% endblock %}
+
+{% block scripts %}
+<script>
+    const dialog = document.getElementById("quick-add");
+
+    dialog.addEventListener("click", (event) => {
+        if (event.target === dialog) {
+            dialog.close();
+        }
+    });
+</script>
+{% endblock %}
+
+<!--
+    <td>
+        <form class="inline-form" action="{{ url_for('add_stock', product_id=product.id) }}" method="POST">
+            <input
+                type="number"
+                name="quantity"
+                min="0.01"
+                step="0.01"
+                placeholder="Quantity"
+                required
+            >
+            <input
+                type="text"
+                name="remarks"
+                placeholder="Remarks (optional)"
+            >
+            <button type="submit">Add Stock</button>
+        </form>
+    </td>
+-->
