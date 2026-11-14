@@ -23,9 +23,15 @@
                 <td>{{ staff.username }}</td>
                 <td>{{ "Enabled" if staff.enabled else "Disabled" }}</td>
                 <td>
-                    <form>
-                        <button>Disable</button>
-                    </form>
+                    {% if staff.enabled %}
+                        <form method="POST" action="{{ url_for('disable_staff', user_id=staff.id) }}">
+                            <button type="submit">Disable</button>
+                        </form>
+                    {% else %}
+                        <form method="POST" action="{{ url_for('enable_staff', user_id=staff.id) }}">
+                            <button type="submit">Enable</button>
+                        </form>
+                    {% endif %}
                 </td>
             </tr>
             {% endfor %}

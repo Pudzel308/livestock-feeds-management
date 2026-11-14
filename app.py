@@ -591,5 +591,36 @@ def staff_management():
         staff_members=staff_members
     )
 
+
+@app.route("/staff/<int:user_id>/disable", methods=["POST"])
+@roles_required("admin")
+def disable_staff(user_id):
+    staff = db.session.get(User, user_id)
+
+    if staff is None or staff.role != "staff":
+        abort(404)
+
+    staff.enabled = False
+    db.session.commit()
+
+    flash(f"Staff account {staff.username} disabled.", "success")
+    return redirect(url_for("staff_management"))
+
+
+@app.route("/staff/<int:user_id>/enable", methods=["POST"])
+@roles_required("admin")
+def enable_staff(user_id):
+    staff = db.session.get(User, user_id)
+
+    if staff is None or staff.role != "staff":
+        abort(404)
+
+    staff.enabled = False
+    db.session.commit()
+
+    flash(f"Staff account {staff.username} enabled.", "success")
+    return redirect(url_for("staff_management"))
+
+
 if __name__ == "__main__":
     app.run(debug=True)
