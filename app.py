@@ -495,5 +495,9 @@ def _get_inventory_data():
         ]
     return inventory_movement, recent_inventory_logs, len(inventory_frame)
 
+@app.route("/staff")
+def staff_management():
+    return render_template("staff_management.html")
+
 if __name__ == "__main__":
     app.run(debug=True)
