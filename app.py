@@ -13,7 +13,8 @@ from models import (
     InventoryLog, 
     Sale, 
     SaleItem, 
-    User
+    User,
+    ActivityLog
 )
 from flask_login import (
     LoginManager, 
@@ -205,6 +206,11 @@ def add_stock(product_id):
             )
         )
 
+        record_activity(
+            "stock_added",
+            f"Added {quantity:g} {product.unit} to {product.name}",
+        )
+
         db.session.commit()
         flash(f"Added {quantity:g} {product.unit} to {product.name}.", "success")
 
@@ -254,6 +260,12 @@ def quick_add_stock():
                 remarks=remarks or "Quick stock addition",
             )
         )
+
+        record_activity(
+            "sale_recorded",
+            f"Sale #{sale.id} recorded for ₱{total:.2f}",
+        )
+
         db.session.commit()
     except SQLAlchemyError:
         db.session.rollback()
@@ -692,8 +704,25 @@ def enable_staff(user_id):
 @login_required
 @roles_required("admin")
 def activity_logs():
+    logs = db.session.execute(
+        select(ActivityLog)
+        .order_by(ActivityLog.timestamp.desc(), ActivityLog.id.desc())
+        .limit(100)
+    ).scalars().all()
+
     return render_template(
-        "activity_logs.html"
+        "activity_logs.html",
+        logs=logs
+    )
+
+
+def record_activity(action, details):
+    db.session.add(
+        ActivityLog(
+            user_id=current_user.id,
+            action=action,
+            details=details,
+        )
     )
 
 

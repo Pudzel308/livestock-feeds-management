@@ -17,12 +17,21 @@
             </tr>
         </thead>
         <tbody>
+            {% for log in logs %}
             <tr>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
+                <td>{{ log.id }}</td>
+                <td>{{ log.user.username if log.user else "Unknown user" }}</td>
+                <td>{{ log.timestamp.strftime("%Y-%m-%d %H:%M UTC") }}</td>
+                <td>
+                    {{ log.action.replace("_", " ").title() }}
+                    {% if log.details %} — {{ log.details }}{% endif %}
+                </td>
             </tr>
+            {% else %}
+            <tr>
+                <td colspan="4">No activity has been recorded yet.</td>
+            </tr>
+            {% endfor %}
         </tbody>
     </table>
 </section>
