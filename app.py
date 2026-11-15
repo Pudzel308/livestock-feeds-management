@@ -400,6 +400,7 @@ def sales():
 
 @app.route("/sales/history")
 @login_required
+@roles_required("admin")
 def sales_history():
     all_sales = db.session.execute(
         select(Sale).order_by(Sale.timestamp.desc(), Sale.id.desc())
@@ -410,6 +411,7 @@ def sales_history():
 
 @app.route("/sales/<int:sale_id>")
 @login_required
+@roles_required("admin")
 def sale_detail(sale_id):
     sale = db.session.get(Sale, sale_id)
 
@@ -684,6 +686,15 @@ def enable_staff(user_id):
 
     flash(f"Staff account {staff.username} enabled.", "success")
     return redirect(url_for("staff_management"))
+
+
+@app.route("/activity")
+@login_required
+@roles_required("admin")
+def activity_logs():
+    return render_template(
+        "activity_logs.html"
+    )
 
 
 if __name__ == "__main__":

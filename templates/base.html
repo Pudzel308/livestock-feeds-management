@@ -274,9 +274,10 @@
             {% endif %}
             <a href="{{ url_for('index') }}">Inventory</a>
             <a href="{{ url_for('sales') }}">Record Sale</a>
-            <a href="{{ url_for('sales_history') }}">Sales History</a>
             {% if current_user.role == "admin" %}
+                <a href="{{ url_for('sales_history') }}">Sales History</a>
                 <a href="{{ url_for('staff_management') }}">Staffs</a>
+                <a href="{{ url_for('activity_logs') }}">Activity Logs</a>
             {% endif %}
         </nav>
     </header>

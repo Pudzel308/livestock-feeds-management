@@ -20,15 +20,12 @@
     <h2 class="page-title">Dashboard</h2>
 
     <section class="cards">
+    {% if current_user.role == "admin" %}
         <article class="card">
             <h3>Total Sales</h3>
             <p class="value">{{ total_sales }}</p>
         </article>
-
-        <article class="card">
-            <h3>Total Revenue</h3>
-            <p class="value">₱{{ "{:,.2f}".format(total_revenue) }}</p>
-        </article>
+    {% endif %}
 
         <article class="card">
             <h3>Low-Stock Products</h3>
@@ -44,6 +41,8 @@
             <p class="value">{{ products_moved }}</p>
         </article>
     </section>
+
+{% if current_user.role == "admin" %}
 
     <section class="panel">
         <h3 class="section-title">Recent Sales</h3>
@@ -81,6 +80,9 @@
             <p>No sales transactions have been recorded yet.</p>
         {% endif %}
     </section>
+
+{% endif %}
+
     <section class="panel">
         <h3 class="section-title">Inventory Movement</h3>
         {% if inventory_movement %}
@@ -112,8 +114,9 @@
         {% else %}
         <p>No stock additions or sales have been logged yet.</p>
         {% endif %}
-
-        <h4>Recent Inventory Logs</h4>
+    </section>
+    <section class="panel">
+        <h3 class="section-title">Recent Inventory Logs</h3>
         {% if recent_inventory_logs %}
         <div class="table-scroll">
             <table>

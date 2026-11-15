@@ -19,6 +19,7 @@
                 <table>
                     <thead>
                         <tr>
+                            <th>ID</th>
                             <th>Feed Product</th>
                             <th>Price</th>
                             <th>Available Stock</th>
@@ -28,6 +29,7 @@
                     <tbody>
                         {% for product in products | sort(attribute='stock_quantity', reverse=true) %}
                             <tr>
+                                <td>{{ product.id }}</td>
                                 <td>{{ product.name }}</td>
                                 <td>₱{{ "%.2f"|format(product.unit_price) }}</td>
                                 <td>

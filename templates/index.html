@@ -118,6 +118,7 @@
                 <option value="{{ product.name }}">
             {% endfor %}
         </datalist>
+
         <input
             type="number"
             name="quantity"
@@ -126,6 +127,7 @@
             placeholder="Quantity"
             required
         >
+
         <input
             type="text"
             name="remarks"
@@ -140,6 +142,7 @@
         <table>
             <thead>
                 <tr>
+                    <th>ID</th>
                     <th>Feed Product</th>
                     <th>Category</th>
                     <th>Price per Unit</th>
@@ -150,6 +153,7 @@
             <tbody>
                 {% for product in products %}
                 <tr>
+                    <td>{{ product.id }}</td>
                     <td>{{ product.name }}</td>
                     <td>{{ product.category }}</td>
                     <td>
