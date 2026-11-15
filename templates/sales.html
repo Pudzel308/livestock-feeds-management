@@ -7,13 +7,102 @@
         .panel button {
             margin-top: 20px;
         }
+
+        .sales-toolbar {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+        }
+
+        .filters {
+            display: flex;
+            width: auto;
+            justify-content: right;
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
+
+        .filters button {
+            border: 0px;
+        }
+
+        .quick-add-toolbar {
+            display: flex;
+            flex: 0 0 auto;
+            justify-content: right;
+            align-items: center;
+            margin-top: 10px;
+            margin-bottom: 10px;
+            width: auto;
+        }
+
+        .quick-add-toolbar button {
+            width: auto;
+            align-self: right;
+            white-space: nowrap;
+        }
+
+        .chart-frame {
+            position: relative;
+            min-height: 300px;
+        }
+
+        .filters form select{
+            height: 35px;
+            font-size: 11px;
+        }
+
+        .filters form select, input {
+            margin-left: 5px;
+            margin-right: 5px;
+        }
+
+        dialog {
+            width: min(90%, 420px);
+            border: 0;
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 8px 30px rgb(0 0 0 / 25%);
+        }
+
+        dialog input {
+            margin-bottom: 20px;
+        }
+
+        dialog::backdrop {
+            background: rgb(0 0 0 / 45%);
+        }
     </style>
 {% endblock %}
 
 {% block content %}
     <h2 class="page-title">Record Sale</h2>
     
-    <form method="POST">
+    <div class="sales-toolbar">
+        <div class="filters">
+            <form method="GET" action="{{ url_for('sales') }}">
+                <select name="filter" onChange="this.form.submit()">
+                    <option value="">-- All Categories --</option>
+                    <option value="Hog Feeds" {% if request.args.get('filter') == 'Hog Feeds' %}selected{% endif %}>Hog Feeds</option>
+                    <option value="Poultry" {% if request.args.get('filter') == 'Poultry' %}selected{% endif %}>Poultry</option>
+                    <option value="Feeds" {% if request.args.get('filter') == 'Feeds' %}selected{% endif %}>Feeds</option>
+                    <option value="Swine" {% if request.args.get('filter') == 'Swine' %}selected{% endif %}>Swine</option>
+                </select>
+                <input
+                    type="search"
+                    name="search"
+                    placeholder="Search"
+                    value="{{ search }}"
+                >
+                <button type="submit">Search</button>
+            </form>
+
+        </div>
+    </div>
+
+    <form method="POST" action="{{ url_for('sales', filter=selected_category, search=search) }}">
         <section class="panel">
             <div class="table-scroll">
                 <table>
@@ -21,7 +110,8 @@
                         <tr>
                             <th>ID</th>
                             <th>Feed Product</th>
-                            <th>Price</th>
+                            <th>Category</th>
+                            <th>Price per Unit</th>
                             <th>Available Stock</th>
                             <th>Quantity to Sell</th>
                         </tr>
@@ -31,6 +121,7 @@
                             <tr>
                                 <td>{{ product.id }}</td>
                                 <td>{{ product.name }}</td>
+                                <td>{{ product.category }}</td>
                                 <td>₱{{ "%.2f"|format(product.unit_price) }}</td>
                                 <td>
                                     {{ product.stock_quantity }} {{ product.unit }}

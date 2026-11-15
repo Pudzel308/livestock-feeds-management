@@ -80,6 +80,14 @@ def login():
             return redirect(url_for("login"))
 
         login_user(user)
+
+        try:
+            record_activity("login", "User logged in")
+            db.session.commit()
+        except SQLAlchemyError:
+            db.session.rollback()
+            app.logger.exception("Could not save login activity")
+
         flash("Logged in successfully.", "success")
         return redirect(url_for("dashboard"))
 
@@ -89,6 +97,13 @@ def login():
 @app.route("/logout", methods=["POST"])
 @login_required
 def logout():
+    try:
+        record_activity("logout", "User logged out")
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        app.logger.exception("Could not save logout activity")
+
     logout_user()
     flash("You have been logged out.", "success")
     return redirect(url_for("login"))
@@ -262,8 +277,8 @@ def quick_add_stock():
         )
 
         record_activity(
-            "sale_recorded",
-            f"Sale #{sale.id} recorded for ₱{total:.2f}",
+            "stock_added",
+            f"Added {quantity:g} {product.unit} to {product.name}",
         )
 
         db.session.commit()
@@ -279,16 +294,44 @@ def quick_add_stock():
 @app.route("/sales", methods=["GET", "POST"])
 @login_required
 def sales():
+    selected_category = request.args.get("filter", "").strip()
+    search = request.args.get("search", "").strip()
+
+    categories = db.session.execute(
+        select(FeedProduct.category).distinct().order_by(FeedProduct.category)
+    ).scalars().all()
+
+    query = select(FeedProduct)
+    conditions = []
+
+    if selected_category:
+        conditions.append(FeedProduct.category == selected_category)
+
+    if search:
+        pattern = f"%{search}%"
+        conditions.append(
+            (FeedProduct.name.ilike(pattern))
+            | (FeedProduct.category.ilike(pattern))
+        )
+
+    if conditions:
+        query = query.where(*conditions)
+
     products = db.session.execute(
-        select(FeedProduct).order_by(FeedProduct.name)
+        query.order_by(FeedProduct.stock_quantity.desc(), FeedProduct.name)
     ).scalars().all()
 
     if request.method == "GET":
-        return render_template("sales.html", products=products)
+        return render_template(
+            "sales.html",
+            products=products,
+            categories=categories,
+            selected_category=selected_category,
+            search=search,
+        )
 
     requested_items = []
 
-    # Validate every requested item before changing inventory.
     for product in products:
         raw_quantity = request.form.get(f"quantity_{product.id}", "").strip()
 
@@ -392,6 +435,11 @@ def sales():
                 )
             )
 
+        record_activity(
+            "sale_recorded",
+            f"Sale #{sale.id} recorded for ₱{total:.2f}",
+        )
+
         db.session.commit()
 
         flash(
@@ -407,7 +455,11 @@ def sales():
         db.session.rollback()
         flash("The sale could not be saved. No changes were committed.", "error")
 
-    return redirect(url_for("sales"))
+    return redirect(url_for(
+        "sales",
+        filter=selected_category or None,
+        search=search or None
+    ))
 
 
 @app.route("/sales/history")
@@ -423,7 +475,6 @@ def sales_history():
 
 @app.route("/sales/<int:sale_id>")
 @login_required
-@roles_required("admin")
 def sale_detail(sale_id):
     sale = db.session.get(Sale, sale_id)
 
