@@ -13,6 +13,13 @@ python -m pip install -r requirements.txt
 
 ## Run
 
+> Only Run this command if 'python app.py' fails.
+
+```
+source .venv/bin/activate
+```
+
+
 ```
 python app.py
 ```
