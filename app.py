@@ -891,6 +891,44 @@ def enable_staff(user_id):
     return redirect(url_for("staff_management"))
 
 
+@app.route("/staff/create", methods=["POST"])
+@login_required
+@roles_required("admin")
+def create_staff():
+    username = request.form.get("username", "").strip()
+    password = request.form.get("password", "")
+
+    if not username or not password:
+        flash("Username and password are required.", "error")
+        return redirect(url_for("staff_management"))
+
+    if len(password) < 8:
+        flash("Password must be at least 8 characters.", "error")
+        return redirect(url_for("staff_management"))
+
+    existing = db.session.execute(
+        select(User).where(User.username == username)
+    ).scalar_one_or_none()
+
+    if existing:
+        flash("That username is already taken.", "error")
+        return redirect(url_for("staff_management"))
+
+    staff = User(username=username, role="staff", enabled=True)
+    staff.set_password(password)
+
+    try:
+        db.session.add(staff)
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        flash("Could not create the staff account. Please try again.", "error")
+        return redirect(url_for("staff_management"))
+
+    flash(f"Staff account {username} created.", "success")
+    return redirect(url_for("staff_management"))
+
+
 @app.route("/activity")
 @login_required
 @roles_required("admin")

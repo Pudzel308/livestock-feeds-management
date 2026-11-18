@@ -4,6 +4,17 @@
 
 {% block head_extra %}
     <style>
+        #create-staff div {
+            display: flex;
+            justify-content: center;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        #create-staff div input {
+            height: 40px;
+        }
+
         .staff-toolbar {
             display: flex;
             justify-content: center;
@@ -17,10 +28,19 @@
 <h2 class="page-title">Staff Management</h2>
 
 <div class="staff-toolbar">
-    <form>
-        <button type="submit">Create Staff</button>
-    </form>
+    <button onClick="document.getElementById('create-staff').showModal()">Create Staff</button>
 </div>
+
+<dialog id="create-staff">
+    <h3 class="section-title">Create Staff</h3>
+    <form method="POST" action="{{ url_for('create_staff') }}">
+        <div>
+            <input type="text" name="username" maxlength="80" placeholder="Username" required>
+            <input type="password" name="password" minlength="8" placeholder="Password" required>
+            <button type="submit">Create Staff</button>
+        </div>
+    </form>
+</dialog>
 
 <section class="panel">
     {% if staff_members %}
@@ -59,4 +79,16 @@
     {% endif %}
 </section>
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const dialog = document.getElementById("create-staff");
+
+    dialog.addEventListener("click", (event) => {
+        if (event.target === dialog) {
+            dialog.close();
+        }
+    });
+</script>
 {% endblock %}
