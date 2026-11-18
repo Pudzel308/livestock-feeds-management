@@ -57,42 +57,6 @@ def roles_required(*roles):
     return decorator
 
 
-def _get_product_daily_sales(product_id, days=90):
-    cutoff = datetime.utcnow() - timedelta(days=days)
-
-    rows = db.session.execute(
-        select(
-            func.date(Sale.timestamp).label("sale_date"),
-            func.sum(SaleItem.quantity).label("units_sold")
-        )
-        .join(SaleItem, SaleItem.sale_id == Sale.id)
-        .where(SaleItem.product_id == product_id)
-        .where(Sale.timestamp >= cutoff)
-        .group_by(func.date(Sale.timestamp))
-        .order_by(func.date(Sale.timestamp))
-    ).all()
-
-    data = []
-    for row in rows:
-        data.append({
-            "date": row.sale_date,
-            "units_sold": float(row.units_sold or 0)
-        })
-
-    df = pd.DataFrame(data)
-    if df.empty:
-        return pd.DataFrame(columns=["date", "units_sold"])
-
-    df["date"] = pd.to_datetime(df["date"])
-    df = df.set_index("date").sort_index()
-
-    # complete missing dates
-    full_index = pd.date_range(df.index.min(), pd.Timestamp.utcnow().normalize(), freq="D")
-    df = df.reindex(full_index, fill_value=0.0)
-
-    return df
-
-
 @login_manager.user_loader
 def load_user(user_id, remember=False):
     return db.session.get(User, int(user_id))
@@ -651,6 +615,77 @@ def analytics():
     total_revenue = float(sales_frame["total_amount"].sum()) if not sales_frame.empty else 0.0
     total_sales = int(len(sales_frame))
 
+    products = db.session.execute(
+        select(FeedProduct).order_by(FeedProduct.name)
+    ).scalars().all()
+
+    product_id = request.args.get("product_id", type=int)
+    if product_id is None and products:
+        product_id = products[0].id
+
+    selected_product = db.session.get(FeedProduct, product_id) if product_id else None
+    forecast_data = None
+
+    if selected_product:
+        daily_sales = _get_product_daily_sales(selected_product.id, days=120)
+        forecast_data = _moving_average_forecast(
+            daily_sales,
+            window=30,
+            horizon=7,
+        )
+
+        history_dates = pd.to_datetime(daily_sales.index)
+        future_dates = pd.date_range(
+            start=history_dates.max() + pd.Timedelta(days=1),
+            periods=7,
+            freq="D",
+        )
+
+        history_values = daily_sales["units_sold"].astype(float)
+        smoothed_history = (
+            history_values.rolling(window=7, min_periods=1).mean().round(2)
+        )
+
+        forecast_data["labels"] = [
+            date.strftime("%b %d")
+            for date in list(history_dates) + list(future_dates)
+        ]
+
+        forecast_data["actual_series"] = (
+            history_values.round(2).tolist() + [None] * 7
+        )
+        forecast_data["history_series"] = (
+            smoothed_history.tolist() + [None] * 7
+        )
+
+        forecast_data["forecast_series"] = (
+            [None] * (len(smoothed_history) - 1)
+            + [float(smoothed_history.iloc[-1])]
+            + [float(value) for value in forecast_data["forecast"]]
+        )
+
+        current_stock = float(selected_product.stock_quantity)
+        average_demand = forecast_data["avg_daily_demand"]
+
+        stock_cover_days = (
+            current_stock / average_demand if average_demand > 0 else None
+        )
+
+        if stock_cover_days is None:
+            risk_level = "No demand"
+        elif stock_cover_days <= 7:
+            risk_level = "High"
+        elif stock_cover_days <= 14:
+            risk_level = "Medium"
+        else:
+            risk_level = "Low"
+
+        forecast_data["current_stock"] = current_stock
+        forecast_data["stock_cover_days"] = (
+            round(stock_cover_days, 2) if stock_cover_days is not None else None
+        )
+        forecast_data["risk_level"] = risk_level
+
     return render_template(
         "analytics.html",
         total_sales=total_sales,
@@ -659,93 +694,50 @@ def analytics():
         sales_trends=sales_trends,
         top_sellers=top_sellers,
         descriptive_stats=descriptive_stats,
-    )
-
-
-@app.route("/forecast")
-@login_required
-@roles_required("admin")
-def forecast():
-    products = db.session.execute(
-        select(FeedProduct).order_by(FeedProduct.name)
-    ).scalars().all()
-
-    product_id = request.args.get("product_id", type=int)
-
-    if not product_id and products:
-        product_id = products[0].id
-
-    selected_product = None
-    forecast_data = None
-
-    if product_id:
-        selected_product = db.session.get(FeedProduct, product_id)
-        if selected_product:
-            daily_sales = _get_product_daily_sales(product_id, days=120)
-            forecast_data = _moving_average_forecast(daily_sales, window=7, horizon=7)
-
-            current_stock = float(selected_product.stock_quantity)
-            avg_daily = forecast_data["avg_daily_demand"]
-
-            if avg_daily > 0:
-                stock_cover_days = current_stock / avg_daily
-            else:
-                stock_cover_days = float("inf")
-
-            if stock_cover_days == float("inf"):
-                risk_level = "No demand"
-            elif stock_cover_days <= 7:
-                risk_level = "High"
-            elif stock_cover_days <= 14:
-                risk_level = "Medium"
-            else:
-                risk_level = "Low"
-
-            forecast_data["stock_cover_days"] = round(stock_cover_days, 2) if stock_cover_days != float("inf") else None
-            forecast_data["risk_level"] = risk_level
-            forecast_data["current_stock"] = current_stock
-
-    return render_template(
-        "forecast.html",
         products=products,
         selected_product=selected_product,
         forecast_data=forecast_data,
-        product_id=product_id,
     )
 
 
-def _get_product_daily_sales(product_id, days=90):
-    cutoff = datetime.utcnow() - timedelta(days=days)
+def _get_product_daily_sales(product_id, days=120):
+    end = pd.Timestamp(datetime.utcnow().date())
+    start = end - pd.Timedelta(days=days - 1)
+    full_index = pd.date_range(start=start, end=end, freq="D")
+
+    cutoff = datetime.combine(start.date(), datetime.min.time())
 
     rows = db.session.execute(
         select(
             func.date(Sale.timestamp).label("sale_date"),
-            func.sum(SaleItem.quantity).label("units_sold")
+            func.sum(SaleItem.quantity).label("units_sold"),
         )
         .join(SaleItem, SaleItem.sale_id == Sale.id)
-        .where(SaleItem.product_id == product_id)
-        .where(Sale.timestamp >= cutoff)
+        .where(
+            SaleItem.product_id == product_id,
+            Sale.timestamp >= cutoff,
+        )
         .group_by(func.date(Sale.timestamp))
         .order_by(func.date(Sale.timestamp))
     ).all()
 
-    data = []
-    for row in rows:
-        data.append({
-            "date": row.sale_date,
-            "units_sold": float(row.units_sold or 0)
-        })
+    df = pd.DataFrame(
+        [
+            {
+                "date": row.sale_date,
+                "units_sold": float(row.units_sold or 0),
+            }
+            for row in rows
+        ]
+    )
 
-    df = pd.DataFrame(data)
     if df.empty:
-        return pd.DataFrame(columns=["date", "units_sold"])
+        return pd.DataFrame({"units_sold": 0.0}, index=full_index)
 
-    df["date"] = pd.to_datetime(df["date"], utc=False)
-    end = pd.Timestamp(datetime.utcnow().date())   # tz-naive
-    start = df.index.min()
-    full_index = pd.date_range(start=start, end=end, freq="D")
+    df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.normalize()
+    df = df.dropna(subset=["date"]).set_index("date").sort_index()
 
-    return df
+    return df.reindex(full_index, fill_value=0.0)
 
 
 def _moving_average_forecast(daily_sales, window=7, horizon=7):
