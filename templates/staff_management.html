@@ -2,8 +2,25 @@
 
 {% block title %}Staffs - Livestock Feeds Management{% endblock %}
 
+{% block head_extra %}
+    <style>
+        .staff-toolbar {
+            display: flex;
+            justify-content: center;
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
+    </style>
+{% endblock %}
+
 {% block content %}
 <h2 class="page-title">Staff Management</h2>
+
+<div class="staff-toolbar">
+    <form>
+        <button type="submit">Create Staff</button>
+    </form>
+</div>
 
 <section class="panel">
     {% if staff_members %}
