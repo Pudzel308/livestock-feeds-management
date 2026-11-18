@@ -271,6 +271,7 @@
             <a href="{{ url_for('dashboard') }}">Dashboard</a>
             {% if current_user.role == "admin" %}
                 <a href="{{ url_for('analytics') }}">Analytics</a>
+                <a href="{{ url_for('forecast') }}">Forecasting</a>
             {% endif %}
             <a href="{{ url_for('index') }}">Inventory</a>
             <a href="{{ url_for('sales') }}">Record Sale</a>
