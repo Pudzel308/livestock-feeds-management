@@ -6,6 +6,12 @@ In the terminal, make sure the current working directory is in the project itsel
 python -m venv .venv
 ```
 
+activate it on windows
+```
+.venv\Scripts\activate
+```
+
+
 ```
 python -m pip install -r requirements.txt
 ```
