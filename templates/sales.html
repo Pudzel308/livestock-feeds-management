@@ -59,6 +59,17 @@
             margin-right: 5px;
         }
 
+        .table-scroll {
+            max-height: 65vh;
+            overflow-y: auto;
+        }
+
+        .table-scroll thead th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+
         dialog {
             width: min(90%, 420px);
             border: 0;

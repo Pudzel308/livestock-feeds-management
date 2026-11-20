@@ -2,6 +2,23 @@
 
 {% block title %}Sales History - Livestock Feeds Management{% endblock %}
 
+{% block head_extra %}
+    <style>
+        
+        .table-scroll {
+            max-height: 75vh;
+            overflow-y: auto;
+        }
+
+        .table-scroll thead th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+
+    </style>
+{% endblock %}
+
 {% block content %}
     <h2 class="page-title">Sales History</h2>
 

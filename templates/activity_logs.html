@@ -2,37 +2,56 @@
 
 {% block title %}Activity - Livestock Feeds Management{% endblock %}
 
+{% block head_extra %}
+    <style>
+        
+        .table-scroll {
+            max-height: 75vh;
+            overflow-y: auto;
+        }
+
+        .table-scroll thead th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+
+    </style>
+{% endblock %}
+
 {% block content %}
 <h2 class="page-title">Activity Logs</h2>
 
 <section class="panel">
-    <table>
-        <thead>
-            <tr>
-                <th>Action Id</th>
-                <th>User</th>
-                <th>Date</th>
-                <th>Action</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for log in logs %}
-            <tr>
-                <td>{{ log.id }}</td>
-                <td>{{ log.user.username if log.user else "Unknown user" }}</td>
-                <td>{{ log.timestamp.strftime("%Y-%m-%d %H:%M UTC") }}</td>
-                <td>
-                    {{ log.action.replace("_", " ").title() }}
-                    {% if log.details %} — {{ log.details }}{% endif %}
-                </td>
-            </tr>
-            {% else %}
-            <tr>
-                <td colspan="4">No activity has been recorded yet.</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <div class="table-scroll">
+        <table>
+            <thead>
+                <tr>
+                    <th>Action Id</th>
+                    <th>User</th>
+                    <th>Date</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td>{{ log.id }}</td>
+                    <td>{{ log.user.username if log.user else "Unknown user" }}</td>
+                    <td>{{ log.timestamp.strftime("%Y-%m-%d %H:%M UTC") }}</td>
+                    <td>
+                        {{ log.action.replace("_", " ").title() }}
+                        {% if log.details %} — {{ log.details }}{% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="4">No activity has been recorded yet.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </section>
 
 {% endblock %}

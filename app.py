@@ -31,7 +31,6 @@ from functools import wraps
 import pandas as pd
 
 app = Flask(__name__)
-
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///livestock.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SECRET_KEY"] = "susi-ng-mga-it"
