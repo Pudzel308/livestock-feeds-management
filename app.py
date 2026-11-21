@@ -14,7 +14,9 @@ from models import (
     Sale, 
     SaleItem, 
     User,
-    ActivityLog
+    ActivityLog,
+    StockLot,
+    StockConditionLog,
 )
 from flask_login import (
     LoginManager, 
@@ -41,6 +43,19 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 login_manager = LoginManager()
 login_manager.login_view = "login"
 login_manager.init_app(app)
+
+
+CONDITIONS = {
+    "saleable",
+    "near_expiry",
+    "damaged",
+    "spoiled",
+    "expired",
+    "quarantined",
+    "destroyed",
+}
+
+SELLABLE_CONDITIONS = {"saleable", "near_expiry"}
 
 db.init_app(app)
 
@@ -193,6 +208,115 @@ def index():
     )
 
 
+@app.route("/lots/<int:lot_id>/condition", methods=["POST"])
+@login_required
+@roles_required("admin", "staff")
+def change_lot_condition(lot_id):
+    lot = db.session.get(StockLot, lot_id)
+    if lot is None:
+        abort(404)
+
+    new_condition = request.form.get("condition", "").strip()
+    raw_quantity = request.form.get("quantity", "").strip()
+    remark = request.form.get("remark", "").strip()
+
+    if new_condition not in CONDITIONS:
+        flash("Choose a valid stock condition.", "error")
+        return redirect(url_for("index"))
+
+    if not remark:
+        flash("A description is required.", "error")
+        return redirect(url_for("index"))
+
+    try:
+        quantity = float(raw_quantity)
+    except (TypeError, ValueError):
+        flash("Enter a valid quantity.", "error")
+        return redirect(url_for("index"))
+
+    if quantity <= 0 or quantity > lot.quantity:
+        flash(
+            "Quantity must be greater than zero and no larger than the lot quantity.",
+            "error",
+        )
+        return redirect(url_for("index"))
+
+    previous_condition = lot.condition
+    is_full_lot = quantity >= lot.quantity - 1e-9
+    log_lot = lot
+
+    try:
+        if new_condition == "destroyed":
+            # Remove only the affected amount. Keep any remaining amount
+            # in its original lot and condition.
+            lot.quantity = max(0, lot.quantity - quantity)
+            if lot.quantity == 0:
+                lot.condition = "destroyed"
+
+            lot.product.stock_quantity = max(
+                0, lot.product.stock_quantity - quantity
+            )
+
+        elif is_full_lot:
+            lot.condition = new_condition
+
+        else:
+            # Split the affected quantity into a new lot.
+            lot.quantity -= quantity
+            log_lot = StockLot(
+                product_id=lot.product_id,
+                quantity=quantity,
+                condition=new_condition,
+                expiry_date=lot.expiry_date,
+            )
+            db.session.add(log_lot)
+            db.session.flush()
+
+        db.session.add(
+            StockConditionLog(
+                lot_id=log_lot.id,
+                product_id=lot.product_id,
+                previous_condition=previous_condition,
+                new_condition=new_condition,
+                quantity=quantity,
+                remark=remark,
+                changed_by_id=current_user.id,
+            )
+        )
+
+        record_activity(
+            "stock_condition_changed",
+            f"{lot.product.name}: {previous_condition} → {new_condition} "
+            f"({quantity:g} {lot.product.unit}). {remark}",
+        )
+
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        flash("Could not update the stock condition.", "error")
+        return redirect(url_for("index"))
+
+    flash("Stock condition updated.", "success")
+    return redirect(url_for("index"))
+
+
+def get_total_stock(product_id):
+    return db.session.scalar(
+        db.select(func.coalesce(func.sum(StockLot.quantity), 0))
+        .where(
+            StockLot.product_id == product_id,
+            StockLot.condition.in_([
+                "saleable",
+                "near_expiry",
+                "damaged",
+                "spoiled",
+                "expired",
+                "quarantined",
+            ]),
+        )
+    )
+
+
 @app.route("/products/<int:product_id>/add-stock", methods=["POST"])
 @login_required
 def add_stock(product_id):
@@ -211,6 +335,14 @@ def add_stock(product_id):
             return redirect(url_for("index"))
 
         product.stock_quantity += quantity
+
+        db.session.add(
+            StockLot(
+                product_id=product.id,
+                quantity=quantity,
+                condition="saleable",
+            )
+        )
 
         db.session.add(
             InventoryLog(
@@ -242,6 +374,7 @@ def quick_add_stock():
     product_name = request.form.get("product-name", "").strip()
     raw_quantity = request.form.get("quantity", "").strip()
     remarks = request.form.get("remarks", "").strip()
+    expiry_date = request.form.get("expiry_date")
 
     product = db.session.execute(
         select(FeedProduct).where(
@@ -265,7 +398,25 @@ def quick_add_stock():
 
     quantity = float(quantity_decimal)
 
+    parsed_expiry_date = None
+    if expiry_date:
+        try:
+            parsed_expiry_date = datetime.strptime(
+                expiry_date, "%Y-%m-%d"
+            ).date()
+        except ValueError:
+            flash("Enter a valid expiry date.", "error")
+            return redirect(url_for("index"))
+
     try:
+        lot = StockLot(
+            product_id=product.id,
+            quantity=quantity,
+            condition="saleable",
+            expiry_date=parsed_expiry_date,
+        )
+        db.session.add(lot)
+
         product.stock_quantity += quantity
         db.session.add(
             InventoryLog(
@@ -364,10 +515,18 @@ def sales():
 
         quantity = float(quantity_decimal)
 
-        if quantity > product.stock_quantity:
+        sellable_stock = db.session.scalar(
+            select(func.coalesce(func.sum(StockLot.quantity), 0)).where(
+                StockLot.product_id == product.id,
+                StockLot.quantity > 0,
+                StockLot.condition.in_(SELLABLE_CONDITIONS),
+            )
+        ) or 0
+
+        if quantity > sellable_stock:
             flash(
-                f"Insufficient stock for {product.name}. "
-                f"Available: {product.stock_quantity:g} {product.unit}.",
+                f"Insufficient saleable stock for {product.name}. "
+                f"Available: {sellable_stock:g} {product.unit}.",
                 "error",
             )
             return redirect(url_for("sales"))
@@ -405,12 +564,32 @@ def sales():
             product = item["product"]
             quantity = item["quantity"]
 
-            # Recheck the stock immediately before deducting it.
-            db.session.refresh(product)
+            lots = db.session.execute(
+                db.select(StockLot)
+                .where(
+                    StockLot.product_id == product.id,
+                    StockLot.quantity > 0,
+                    StockLot.condition.in_(SELLABLE_CONDITIONS),
+                )
+                .order_by(
+                    StockLot.expiry_date.asc().nulls_last(),
+                    StockLot.created_at.asc(),
+                )
+            ).scalars().all()
 
-            if quantity > product.stock_quantity:
+            remaining = quantity
+            for lot in lots:
+                deducted = min(remaining, lot.quantity)
+                lot.quantity -= deducted
+                remaining -= deducted
+
+                if remaining <= 1e-9:
+                    remaining = 0
+                    break
+
+            if remaining > 1e-9:
                 raise ValueError(
-                    f"Insufficient stock for {product.name}. "
+                    f"Insufficient saleable stock for {product.name}. "
                     "The transaction was cancelled."
                 )
 

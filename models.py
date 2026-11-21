@@ -45,6 +45,61 @@ class ActivityLog(db.Model):
     user = db.relationship("User")
 
 
+class StockLot(db.Model):
+    __tablename__ = "stock_lots"
+
+    id = db.Column(db.Integer, primary_key=True)
+    product_id = db.Column(
+        db.Integer,
+        db.ForeignKey("feed_products.id"),
+        nullable=False,
+    )
+    quantity = db.Column(db.Float, nullable=False, default=0)
+    condition = db.Column(db.String(30), nullable=False, default="saleable")
+    expiry_date = db.Column(db.Date, nullable=True)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    product = db.relationship("FeedProduct", backref="lots")
+
+
+class StockConditionLog(db.Model):
+    __tablename__ = "stock_condition_logs"
+
+    id = db.Column(db.Integer, primary_key=True)
+    lot_id = db.Column(
+        db.Integer,
+        db.ForeignKey("stock_lots.id"),
+        nullable=False,
+    )
+    product_id = db.Column(
+        db.Integer,
+        db.ForeignKey("feed_products.id"),
+        nullable=False,
+    )
+    previous_condition = db.Column(db.String(30), nullable=False)
+    new_condition = db.Column(db.String(30), nullable=False)
+    quantity = db.Column(db.Float, nullable=False)
+    remark = db.Column(db.String(500), nullable=False)
+    changed_by_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id"),
+        nullable=False,
+    )
+    timestamp = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    lot = db.relationship("StockLot")
+    product = db.relationship("FeedProduct")
+    changed_by = db.relationship("User")
+
+
 class FeedProduct(db.Model):
     __tablename__ = "feed_products"
 
