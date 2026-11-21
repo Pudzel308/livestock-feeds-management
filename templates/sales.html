@@ -25,42 +25,22 @@
         }
 
         .filters button {
-            border: 0px;
+            border: 0;
         }
 
-        .quick-add-toolbar {
-            display: flex;
-            flex: 0 0 auto;
-            justify-content: right;
-            align-items: center;
-            margin-top: 10px;
-            margin-bottom: 10px;
-            width: auto;
-        }
-
-        .quick-add-toolbar button {
-            width: auto;
-            align-self: right;
-            white-space: nowrap;
-        }
-
-        .chart-frame {
-            position: relative;
-            min-height: 300px;
-        }
-
-        .filters form select{
+        .filters form select {
             height: 35px;
             font-size: 11px;
         }
 
-        .filters form select, input {
+        .filters form select,
+        .filters form input {
             margin-left: 5px;
             margin-right: 5px;
         }
 
         .table-scroll {
-            max-height: 65vh;
+            max-height: 60vh;
             overflow-y: auto;
         }
 
@@ -69,47 +49,32 @@
             top: 0;
             z-index: 1;
         }
-
-        dialog {
-            width: min(90%, 420px);
-            border: 0;
-            border-radius: 8px;
-            padding: 24px;
-            box-shadow: 0 8px 30px rgb(0 0 0 / 25%);
-        }
-
-        dialog input {
-            margin-bottom: 20px;
-        }
-
-        dialog::backdrop {
-            background: rgb(0 0 0 / 45%);
-        }
     </style>
 {% endblock %}
 
 {% block content %}
     <h2 class="page-title">Record Sale</h2>
-    
+
     <div class="sales-toolbar">
         <div class="filters">
             <form method="GET" action="{{ url_for('sales') }}">
-                <select name="filter" onChange="this.form.submit()">
+                <select name="filter" onchange="this.form.submit()">
                     <option value="">-- All Categories --</option>
-                    <option value="Hog Feeds" {% if request.args.get('filter') == 'Hog Feeds' %}selected{% endif %}>Hog Feeds</option>
-                    <option value="Poultry" {% if request.args.get('filter') == 'Poultry' %}selected{% endif %}>Poultry</option>
-                    <option value="Feeds" {% if request.args.get('filter') == 'Feeds' %}selected{% endif %}>Feeds</option>
-                    <option value="Swine" {% if request.args.get('filter') == 'Swine' %}selected{% endif %}>Swine</option>
+                    <option value="Hog Feeds" {% if selected_category == "Hog Feeds" %}selected{% endif %}>Hog Feeds</option>
+                    <option value="Poultry" {% if selected_category == "Poultry" %}selected{% endif %}>Poultry</option>
+                    <option value="Feeds" {% if selected_category == "Feeds" %}selected{% endif %}>Feeds</option>
+                    <option value="Swine" {% if selected_category == "Swine" %}selected{% endif %}>Swine</option>
                 </select>
+
                 <input
                     type="search"
                     name="search"
                     placeholder="Search"
                     value="{{ search }}"
                 >
+
                 <button type="submit">Search</button>
             </form>
-
         </div>
     </div>
 
@@ -123,19 +88,20 @@
                             <th>Feed Product</th>
                             <th>Category</th>
                             <th>Price per Unit</th>
-                            <th>Available Stock</th>
+                            <th>Saleable Stock</th>
                             <th>Quantity to Sell</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for product in products | sort(attribute='stock_quantity', reverse=true) %}
+                        {% for product in products %}
+                            {% set available = sellable_stock.get(product.id, 0) %}
                             <tr>
                                 <td>{{ product.id }}</td>
                                 <td>{{ product.name }}</td>
                                 <td>{{ product.category }}</td>
                                 <td>₱{{ "%.2f"|format(product.unit_price) }}</td>
                                 <td>
-                                    {{ product.stock_quantity }} {{ product.unit }}
+                                    {{ "%.2f"|format(available) }} {{ product.unit }}
                                 </td>
                                 <td>
                                     <input
@@ -143,20 +109,25 @@
                                         name="quantity_{{ product.id }}"
                                         min="0.01"
                                         step="0.01"
-                                        max="{{ product.stock_quantity }}"
-                                        {% if product.stock_quantity <= 0 %}
+                                        max="{{ available }}"
+                                        {% if available <= 0 %}
                                             disabled
-                                            placeholder="Out of stock"
+                                            placeholder="No saleable stock"
                                         {% else %}
                                             placeholder="0"
                                         {% endif %}
                                     >
                                 </td>
                             </tr>
+                        {% else %}
+                            <tr>
+                                <td colspan="6">No products found.</td>
+                            </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
+
             <button type="submit">Complete Sale</button>
         </section>
     </form>

@@ -197,6 +197,16 @@ def index():
         query.order_by(FeedProduct.name)
     ).scalars().all()
 
+    lots = db.session.execute(
+        select(StockLot)
+        .where(StockLot.quantity > 0)
+        .order_by(
+            StockLot.product_id,
+            StockLot.expiry_date.asc().nulls_last(),
+            StockLot.created_at.asc(),
+        )
+    ).scalars().all()
+
     product_suggestions = db.session.execute(
         select(FeedProduct).order_by(FeedProduct.name)
     ).scalars().all()
@@ -204,6 +214,7 @@ def index():
     return render_template(
         "index.html",
         products=products,
+        lots=lots,
         product_suggestions=product_suggestions,
     )
 
@@ -472,6 +483,17 @@ def sales():
         query.order_by(FeedProduct.stock_quantity.desc(), FeedProduct.name)
     ).scalars().all()
 
+    sellable_stock = {}
+
+    for product in products:
+        sellable_stock[product.id] = db.session.scalar(
+            select(func.coalesce(func.sum(StockLot.quantity), 0)).where(
+                StockLot.product_id == product.id,
+                StockLot.quantity > 0,
+                StockLot.condition.in_(SELLABLE_CONDITIONS),
+            )
+        ) or 0
+
     if request.method == "GET":
         return render_template(
             "sales.html",
@@ -479,6 +501,7 @@ def sales():
             categories=categories,
             selected_category=selected_category,
             search=search,
+            sellable_stock=sellable_stock,
         )
 
     requested_items = []
@@ -515,18 +538,12 @@ def sales():
 
         quantity = float(quantity_decimal)
 
-        sellable_stock = db.session.scalar(
-            select(func.coalesce(func.sum(StockLot.quantity), 0)).where(
-                StockLot.product_id == product.id,
-                StockLot.quantity > 0,
-                StockLot.condition.in_(SELLABLE_CONDITIONS),
-            )
-        ) or 0
+        available_stock = sellable_stock.get(product.id, 0)
 
-        if quantity > sellable_stock:
+        if quantity > available_stock:
             flash(
                 f"Insufficient saleable stock for {product.name}. "
-                f"Available: {sellable_stock:g} {product.unit}.",
+                f"Available: {available_stock:g} {product.unit}.",
                 "error",
             )
             return redirect(url_for("sales"))
