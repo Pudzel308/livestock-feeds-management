@@ -19,6 +19,10 @@
 {% block content %}
     <h2 class="page-title">Dashboard</h2>
 
+    <a href="{{ url_for('export_dashboard') }}">
+        <button type="button">Export to Excel</button>
+    </a>
+
     <section class="cards">
     {% if current_user.role == "admin" %}
         <article class="card">

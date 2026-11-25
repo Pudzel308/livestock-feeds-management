@@ -96,6 +96,12 @@
 {% block content %}
     <h2 class="page-title">Analytics</h2>
 
+    {% if current_user.role == "admin" %}
+    <a href="{{ url_for('export_analytics', product_id=selected_product.id if selected_product else None) }}">
+        <button type="button">Export to Excel</button>
+    </a>
+    {% endif %}
+
     <section class="cards" aria-label="Sales summary">
         <article class="card">
             <h3>Sales Transactions</h3>

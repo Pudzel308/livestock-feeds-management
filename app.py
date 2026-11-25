@@ -6,6 +6,7 @@ from flask import (
     redirect,
     url_for,
     flash,
+    send_file,
 )
 from models import (
     db, 
@@ -30,6 +31,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from sqlalchemy import select, func
 from sqlalchemy.exc import SQLAlchemyError
 from functools import wraps
+from io import BytesIO
 import pandas as pd
 
 app = Flask(__name__)
@@ -69,6 +71,19 @@ def roles_required(*roles):
             return view(*args, **kwargs)
         return wrapped
     return decorator
+
+
+def send_excel_workbook(output, filename):
+    output.seek(0)
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name=filename,
+        mimetype=(
+            "application/vnd.openxmlformats-officedocument."
+            "spreadsheetml.sheet"
+        ),
+    )
 
 
 @login_manager.user_loader
@@ -169,6 +184,114 @@ def dashboard():
         recent_inventory_logs=recent_inventory_logs,
         products_moved=len(inventory_movement)
     )
+
+
+@app.route("/dashboard/export")
+@login_required
+def export_dashboard():
+    total_sales = db.session.scalar(
+        select(func.count(Sale.id))
+    ) or 0
+
+    total_revenue = db.session.scalar(
+        select(func.coalesce(func.sum(Sale.total_amount), 0))
+    ) or 0
+
+    low_stock_count = db.session.scalar(
+        select(func.count(FeedProduct.id)).where(
+            FeedProduct.stock_quantity > 0,
+            FeedProduct.stock_quantity <= FeedProduct.low_stock_threshold,
+        )
+    ) or 0
+
+    out_of_stock_count = db.session.scalar(
+        select(func.count(FeedProduct.id)).where(
+            FeedProduct.stock_quantity <= 0
+        )
+    ) or 0
+
+    inventory_movement, recent_inventory_logs, _ = _get_inventory_data()
+
+    output = BytesIO()
+
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        summary = pd.DataFrame([
+            {"Metric": "Total Sales", "Value": total_sales},
+            {"Metric": "Total Revenue", "Value": float(total_revenue)},
+            {"Metric": "Low-Stock Products", "Value": low_stock_count},
+            {"Metric": "Out-of-Stock Products", "Value": out_of_stock_count},
+            {"Metric": "Products with Logged Movement",
+             "Value": len(inventory_movement)},
+        ])
+        summary.to_excel(writer, sheet_name="Summary", index=False)
+
+        movement_columns = [
+            "name", "unit", "stock_added", "stock_sold", "net_change"
+        ]
+        movement_frame = pd.DataFrame(
+            inventory_movement,
+            columns=movement_columns,
+        ).rename(columns={
+            "name": "Product",
+            "unit": "Unit",
+            "stock_added": "Stock Added",
+            "stock_sold": "Stock Sold",
+            "net_change": "Net Change",
+        })
+        movement_frame.to_excel(
+            writer,
+            sheet_name="Inventory Movement",
+            index=False,
+        )
+
+        log_columns = [
+            "timestamp", "product_name", "unit", "action", "quantity",
+            "remarks",
+        ]
+        logs_frame = pd.DataFrame(
+            recent_inventory_logs,
+            columns=log_columns,
+        ).rename(columns={
+            "timestamp": "Date and Time",
+            "product_name": "Product",
+            "unit": "Unit",
+            "action": "Action",
+            "quantity": "Quantity",
+            "remarks": "Remarks",
+        })
+        logs_frame.to_excel(
+            writer,
+            sheet_name="Recent Inventory Logs",
+            index=False,
+        )
+
+        if current_user.role == "admin":
+            sales = db.session.execute(
+                select(Sale)
+                .order_by(Sale.timestamp.desc(), Sale.id.desc())
+                .limit(5)
+            ).scalars().all()
+
+            sales_frame = pd.DataFrame([
+                {
+                    "Sale ID": sale.id,
+                    "Date and Time": sale.timestamp.strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    ),
+                    "Items": len(sale.items),
+                    "Total Amount": float(sale.total_amount),
+                }
+                for sale in sales
+            ], columns=[
+                "Sale ID", "Date and Time", "Items", "Total Amount"
+            ])
+            sales_frame.to_excel(
+                writer,
+                sheet_name="Recent Sales",
+                index=False,
+            )
+
+    return send_excel_workbook(output, "dashboard_report.xlsx")
 
 
 @app.route("/")
@@ -669,6 +792,45 @@ def sales_history():
     return render_template("sales_history.html", sales=all_sales)
 
 
+@app.route("/sales/export")
+@login_required
+@roles_required("admin")
+def export_sales():
+    sales = db.session.execute(
+        select(Sale).order_by(Sale.timestamp, Sale.id)
+    ).scalars().all()
+
+    rows = []
+    for sale in sales:
+        rows.append({
+            "Sale ID": sale.id,
+            "Date and Time": sale.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+            "Number of Items": len(sale.items),
+            "Total": float(sale.total_amount),
+        })
+
+    if rows:
+        sales_frame = pd.DataFrame(rows)
+    else:
+        sales_frame = pd.DataFrame(
+            columns=["Sale ID", "Date and Time", "Number of Items", "Total"]
+        )
+
+    output = BytesIO()
+
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        sales_frame.to_excel(writer, sheet_name="Sales", index=False)
+
+    output.seek(0)
+
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name="sales_report.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
 @app.route("/sales/<int:sale_id>")
 @login_required
 def sale_detail(sale_id):
@@ -893,6 +1055,222 @@ def analytics():
         selected_product=selected_product,
         forecast_data=forecast_data,
     )
+
+
+@app.route("/analytics/export")
+@login_required
+@roles_required("admin")
+def export_analytics():
+    # Sales data and trends
+    sales_rows = db.session.execute(
+        select(Sale.id, Sale.timestamp, Sale.total_amount)
+        .order_by(Sale.timestamp, Sale.id)
+    ).all()
+
+    sales_frame = pd.DataFrame(
+        [dict(row._mapping) for row in sales_rows],
+        columns=["id", "timestamp", "total_amount"],
+    )
+
+    if not sales_frame.empty:
+        sales_frame["timestamp"] = (
+            pd.to_datetime(sales_frame["timestamp"], errors="coerce", utc=True)
+            .dt.tz_convert(None)
+        )
+        sales_frame["total_amount"] = pd.to_numeric(
+            sales_frame["total_amount"], errors="coerce"
+        ).fillna(0.0)
+        sales_frame = sales_frame.dropna(subset=["timestamp"])
+
+    sales_trends = {
+        "daily": _build_sales_trend(sales_frame, "D", "%Y-%m-%d"),
+        "weekly": _build_sales_trend(sales_frame, "W-SUN", "%Y-%m-%d"),
+        "monthly": _build_sales_trend(sales_frame, "M", "%b %Y"),
+    }
+
+    trend_rows = []
+    for period_name, trend in sales_trends.items():
+        for label, count, revenue in zip(
+            trend["labels"], trend["sales"], trend["revenue"]
+        ):
+            trend_rows.append({
+                "Period Type": period_name.title(),
+                "Period": label,
+                "Sales": count,
+                "Revenue": revenue,
+            })
+
+    # Top-selling products
+    item_rows = db.session.execute(
+        select(
+            SaleItem.quantity,
+            SaleItem.subtotal,
+            FeedProduct.name.label("product_name"),
+            FeedProduct.unit,
+        )
+        .join(Sale, SaleItem.sale_id == Sale.id)
+        .join(FeedProduct, SaleItem.product_id == FeedProduct.id)
+    ).all()
+
+    items_frame = pd.DataFrame(
+        [dict(row._mapping) for row in item_rows],
+        columns=["quantity", "subtotal", "product_name", "unit"],
+    )
+
+    if not items_frame.empty:
+        items_frame["quantity"] = pd.to_numeric(
+            items_frame["quantity"], errors="coerce"
+        ).fillna(0.0)
+        items_frame["subtotal"] = pd.to_numeric(
+            items_frame["subtotal"], errors="coerce"
+        ).fillna(0.0)
+
+        top_sellers_frame = (
+            items_frame.groupby(
+                ["product_name", "unit"], as_index=False
+            )
+            .agg(
+                units_sold=("quantity", "sum"),
+                revenue=("subtotal", "sum"),
+            )
+            .sort_values(
+                ["units_sold", "revenue"],
+                ascending=[False, False],
+            )
+            .head(5)
+            .rename(columns={
+                "product_name": "Product",
+                "unit": "Unit",
+                "units_sold": "Quantity Sold",
+                "revenue": "Revenue",
+            })
+        )
+    else:
+        top_sellers_frame = pd.DataFrame(
+            columns=["Product", "Unit", "Quantity Sold", "Revenue"]
+        )
+
+    # Descriptive statistics
+    total_revenue = (
+        float(sales_frame["total_amount"].sum())
+        if not sales_frame.empty else 0.0
+    )
+    total_sales = len(sales_frame)
+    daily_revenue = sales_trends["daily"]["revenue"]
+
+    stats = []
+    if not sales_frame.empty:
+        stats = [
+            _describe_values("Sale amount (₱)", sales_frame["total_amount"]),
+            _describe_values("Daily revenue (₱)", daily_revenue),
+        ]
+
+    stats_frame = pd.DataFrame(stats)
+
+    # Forecast for the currently selected product
+    products = db.session.execute(
+        select(FeedProduct).order_by(FeedProduct.name)
+    ).scalars().all()
+
+    product_id = request.args.get("product_id", type=int)
+    if product_id is None and products:
+        product_id = products[0].id
+
+    selected_product = (
+        db.session.get(FeedProduct, product_id) if product_id else None
+    )
+
+    forecast_rows = []
+    forecast_summary = []
+
+    if selected_product:
+        daily_sales = _get_product_daily_sales(selected_product.id, days=120)
+        forecast = _moving_average_forecast(
+            daily_sales,
+            window=30,
+            horizon=7,
+        )
+
+        average_demand = forecast["avg_daily_demand"]
+        current_stock = float(selected_product.stock_quantity)
+        stock_cover_days = (
+            current_stock / average_demand if average_demand > 0 else None
+        )
+
+        if stock_cover_days is None:
+            risk_level = "No demand"
+        elif stock_cover_days <= 7:
+            risk_level = "High"
+        elif stock_cover_days <= 14:
+            risk_level = "Medium"
+        else:
+            risk_level = "Low"
+
+        forecast_summary.append({
+            "Product": selected_product.name,
+            "Current Stock": current_stock,
+            "Unit": selected_product.unit,
+            "Average Daily Demand": average_demand,
+            "Stock Cover (Days)": stock_cover_days,
+            "Risk Level": risk_level,
+        })
+
+        future_dates = pd.date_range(
+            start=daily_sales.index.max() + pd.Timedelta(days=1),
+            periods=len(forecast["forecast"]),
+            freq="D",
+        )
+
+        forecast_rows = [
+            {
+                "Date": date.strftime("%Y-%m-%d"),
+                "Product": selected_product.name,
+                "Forecast Quantity": quantity,
+                "Unit": selected_product.unit,
+            }
+            for date, quantity in zip(future_dates, forecast["forecast"])
+        ]
+
+    output = BytesIO()
+
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        summary_frame = pd.DataFrame([
+            {"Metric": "Sales Transactions", "Value": total_sales},
+            {"Metric": "Net Sales", "Value": total_revenue},
+            {
+                "Metric": "Average Sale",
+                "Value": total_revenue / total_sales if total_sales else 0,
+            },
+        ])
+        summary_frame.to_excel(writer, sheet_name="Summary", index=False)
+
+        pd.DataFrame(trend_rows).to_excel(
+            writer,
+            sheet_name="Sales Trends",
+            index=False,
+        )
+        top_sellers_frame.to_excel(
+            writer,
+            sheet_name="Top Sellers",
+            index=False,
+        )
+        stats_frame.to_excel(
+            writer,
+            sheet_name="Statistics",
+            index=False,
+        )
+        pd.DataFrame(forecast_summary).to_excel(
+            writer,
+            sheet_name="Forecast Summary",
+            index=False,
+        )
+        pd.DataFrame(forecast_rows).to_excel(
+            writer,
+            sheet_name="Forecast",
+            index=False,
+        )
+
+    return send_excel_workbook(output, "analytics_report.xlsx")
 
 
 def _get_product_daily_sales(product_id, days=120):
